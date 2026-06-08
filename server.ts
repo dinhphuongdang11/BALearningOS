@@ -12,9 +12,9 @@ app.use(express.json());
 // --- API ROUTES ---
 
 // 1. Dashboard Stats
-app.get("/api/dashboard-stats", (req, res) => {
+app.get("/api/dashboard-stats", async (req, res) => {
   try {
-    const stats = DBService.getDashboardStats();
+    const stats = await DBService.getDashboardStats();
     res.json(stats);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch dashboard stats" });
@@ -22,47 +22,47 @@ app.get("/api/dashboard-stats", (req, res) => {
 });
 
 // 2. Stages CRM/CRUD
-app.get("/api/stages", (req, res) => {
+app.get("/api/stages", async (req, res) => {
   try {
-    const stages = DBService.getStages();
+    const stages = await DBService.getStages();
     res.json(stages);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch stages" });
   }
 });
 
-app.get("/api/stages/:id", (req, res) => {
+app.get("/api/stages/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const stage = DBService.getStageById(id);
+    const stage = await DBService.getStageById(id);
     if (!stage) {
       return res.status(404).json({ error: "Stage not found" });
     }
-    const lessons = DBService.getLessons(id);
+    const lessons = await DBService.getLessons(id);
     res.json({ ...stage, lessons });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch stage details" });
   }
 });
 
-app.post("/api/stages", (req, res) => {
+app.post("/api/stages", async (req, res) => {
   try {
     const { title, description, goal, order } = req.body;
     if (!title) {
       return res.status(400).json({ error: "Title is required" });
     }
-    const stage = DBService.createStage(title, description || "", goal || "", Number(order) || 0);
+    const stage = await DBService.createStage(title, description || "", goal || "", Number(order) || 0);
     res.status(201).json(stage);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to create stage" });
   }
 });
 
-app.put("/api/stages/:id", (req, res) => {
+app.put("/api/stages/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, goal, order } = req.body;
-    const updated = DBService.updateStage(id, { title, description, goal, order: order !== undefined ? Number(order) : undefined });
+    const updated = await DBService.updateStage(id, { title, description, goal, order: order !== undefined ? Number(order) : undefined });
     if (!updated) {
       return res.status(404).json({ error: "Stage not found" });
     }
@@ -72,10 +72,10 @@ app.put("/api/stages/:id", (req, res) => {
   }
 });
 
-app.delete("/api/stages/:id", (req, res) => {
+app.delete("/api/stages/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const success = DBService.deleteStage(id);
+    const success = await DBService.deleteStage(id);
     if (!success) {
       return res.status(404).json({ error: "Stage not found" });
     }
@@ -86,32 +86,32 @@ app.delete("/api/stages/:id", (req, res) => {
 });
 
 // 3. Lessons CRUD
-app.get("/api/lessons", (req, res) => {
+app.get("/api/lessons", async (req, res) => {
   try {
     const { stageId } = req.query;
-    const lessons = DBService.getLessons(stageId as string);
+    const lessons = await DBService.getLessons(stageId as string);
     res.json(lessons);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch lessons" });
   }
 });
 
-app.get("/api/lessons/:id", (req, res) => {
+app.get("/api/lessons/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const lesson = DBService.getLessonById(id);
+    const lesson = await DBService.getLessonById(id);
     if (!lesson) {
       return res.status(404).json({ error: "Lesson not found" });
     }
-    const checklistItems = DBService.getChecklistItems(id);
-    const practice = DBService.getPracticeByLesson(id);
+    const checklistItems = await DBService.getChecklistItems(id);
+    const practice = await DBService.getPracticeByLesson(id);
     res.json({ ...lesson, checklistItems, practice });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch lesson details" });
   }
 });
 
-app.post("/api/lessons", (req, res) => {
+app.post("/api/lessons", async (req, res) => {
   try {
     const {
       stageId,
@@ -142,14 +142,14 @@ app.post("/api/lessons", (req, res) => {
       expectedOutput: expectedOutput || "",
     };
 
-    const lesson = DBService.createLesson(lessonInput, checklistText);
+    const lesson = await DBService.createLesson(lessonInput, checklistText);
     res.status(201).json(lesson);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to create lesson" });
   }
 });
 
-app.put("/api/lessons/:id", (req, res) => {
+app.put("/api/lessons/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -180,7 +180,7 @@ app.put("/api/lessons/:id", (req, res) => {
     if (status !== undefined) updates.status = status as LessonStatus;
     if (personalNote !== undefined) updates.personalNote = personalNote;
 
-    const updated = DBService.updateLesson(id, updates);
+    const updated = await DBService.updateLesson(id, updates);
     if (!updated) {
       return res.status(404).json({ error: "Lesson not found" });
     }
@@ -188,7 +188,7 @@ app.put("/api/lessons/:id", (req, res) => {
     // Sync checklist if provided
     if (checklistText !== undefined) {
       const lines = checklistText.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
-      DBService.syncChecklistItems(id, lines);
+      await DBService.syncChecklistItems(id, lines);
     }
 
     res.json(updated);
@@ -197,10 +197,10 @@ app.put("/api/lessons/:id", (req, res) => {
   }
 });
 
-app.delete("/api/lessons/:id", (req, res) => {
+app.delete("/api/lessons/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const success = DBService.deleteLesson(id);
+    const success = await DBService.deleteLesson(id);
     if (!success) {
       return res.status(404).json({ error: "Lesson not found" });
     }
@@ -211,14 +211,14 @@ app.delete("/api/lessons/:id", (req, res) => {
 });
 
 // 4. Quick state patch triggers
-app.patch("/api/lessons/:id/status", (req, res) => {
+app.patch("/api/lessons/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     if (!status) {
       return res.status(400).json({ error: "Status value is required" });
     }
-    const updated = DBService.updateLesson(id, { status: status as LessonStatus });
+    const updated = await DBService.updateLesson(id, { status: status as LessonStatus });
     if (!updated) {
       return res.status(444).json({ error: "Lesson not found" });
     }
@@ -228,11 +228,11 @@ app.patch("/api/lessons/:id/status", (req, res) => {
   }
 });
 
-app.patch("/api/lessons/:id/personal-note", (req, res) => {
+app.patch("/api/lessons/:id/personal-note", async (req, res) => {
   try {
     const { id } = req.params;
     const { personalNote } = req.body;
-    const updated = DBService.updateLesson(id, { personalNote: personalNote || "" });
+    const updated = await DBService.updateLesson(id, { personalNote: personalNote || "" });
     if (!updated) {
       return res.status(404).json({ error: "Lesson not found" });
     }
@@ -243,38 +243,38 @@ app.patch("/api/lessons/:id/personal-note", (req, res) => {
 });
 
 // 5. Checklist Quick APIs
-app.get("/api/lessons/:id/checklist", (req, res) => {
+app.get("/api/lessons/:id/checklist", async (req, res) => {
   try {
     const { id } = req.params;
-    const list = DBService.getChecklistItems(id);
+    const list = await DBService.getChecklistItems(id);
     res.json(list);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch checklist" });
   }
 });
 
-app.post("/api/lessons/:id/checklist", (req, res) => {
+app.post("/api/lessons/:id/checklist", async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
     if (!content) {
       return res.status(400).json({ error: "Checklist item content is required" });
     }
-    const item = DBService.createChecklistItem(id, content);
+    const item = await DBService.createChecklistItem(id, content);
     res.status(201).json(item);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to create checklist item" });
   }
 });
 
-app.put("/api/checklist-items/:id", (req, res) => {
+app.put("/api/checklist-items/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
     if (!content) {
       return res.status(400).json({ error: "Content is required" });
     }
-    const updated = DBService.updateChecklistItem(id, content);
+    const updated = await DBService.updateChecklistItem(id, content);
     if (!updated) {
       return res.status(444).json({ error: "Checklist item not found" });
     }
@@ -284,10 +284,10 @@ app.put("/api/checklist-items/:id", (req, res) => {
   }
 });
 
-app.patch("/api/checklist-items/:id/toggle", (req, res) => {
+app.patch("/api/checklist-items/:id/toggle", async (req, res) => {
   try {
     const { id } = req.params;
-    const updated = DBService.toggleChecklistItem(id);
+    const updated = await DBService.toggleChecklistItem(id);
     if (!updated) {
       return res.status(404).json({ error: "Checklist item not found" });
     }
@@ -297,10 +297,10 @@ app.patch("/api/checklist-items/:id/toggle", (req, res) => {
   }
 });
 
-app.delete("/api/checklist-items/:id", (req, res) => {
+app.delete("/api/checklist-items/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const success = DBService.deleteChecklistItem(id);
+    const success = await DBService.deleteChecklistItem(id);
     if (!success) {
       return res.status(404).json({ error: "Checklist item not found" });
     }
@@ -311,21 +311,21 @@ app.delete("/api/checklist-items/:id", (req, res) => {
 });
 
 // 6. Practice Save/Fetch
-app.get("/api/lessons/:id/practice", (req, res) => {
+app.get("/api/lessons/:id/practice", async (req, res) => {
   try {
     const { id } = req.params;
-    const practice = DBService.getPracticeByLesson(id);
+    const practice = await DBService.getPracticeByLesson(id);
     res.json(practice);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch practice work" });
   }
 });
 
-app.post("/api/lessons/:id/practice", (req, res) => {
+app.post("/api/lessons/:id/practice", async (req, res) => {
   try {
     const { id } = req.params;
     const { projectName, content, reflection } = req.body;
-    const practice = DBService.savePractice(id, projectName || "", content || "", reflection || "");
+    const practice = await DBService.savePractice(id, projectName || "", content || "", reflection || "");
     res.json(practice);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to save practice work" });

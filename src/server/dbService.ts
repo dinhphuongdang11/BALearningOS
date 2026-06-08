@@ -1,10 +1,12 @@
 /**
  * BA Learning OS
- * Local JSON DB Management with Auto-Seeding (Simulating Prisma ORM)
+ * Hybrid Storage Layer (PostgreSQL Prisma ORM <=> Local db.json Fallback)
+ * Highly optimized for Vercel host deployment compatibility.
  */
 
 import fs from "fs";
 import path from "path";
+import { PrismaClient } from "@prisma/client";
 import { DatabaseSchema, Stage, Lesson, ChecklistItem, Practice, LessonStatus } from "../types.js";
 
 const DB_FILE_PATH = path.join(process.cwd(), "db.json");
@@ -12,6 +14,15 @@ const DB_FILE_PATH = path.join(process.cwd(), "db.json");
 // Helper to generate UUIDs
 function generateUUID(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+// Lazy-initialized Prisma instance for database connection
+let prismaInstance: PrismaClient | null = null;
+function getPrisma(): PrismaClient | null {
+  if (!prismaInstance && process.env.DATABASE_URL) {
+    prismaInstance = new PrismaClient();
+  }
+  return prismaInstance;
 }
 
 // Default Seed Data
@@ -204,42 +215,34 @@ const DEFAULT_LESSONS: Lesson[] = [
 ];
 
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
-  // Lesson 1 Checklists
   { id: "c-1", lessonId: "lesson-1", content: "Tôi đã nắm được 3 vai trò cốt lõi của BA.", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-2", lessonId: "lesson-1", content: "Tôi phân biệt được IT BA và Business BA.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-3", lessonId: "lesson-1", content: "Tôi hiểu vị trí của BA trong các giai đoạn SDLC (Waterfall vs Agile).", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   
-  // Lesson 2 Checklists
   { id: "c-4", lessonId: "lesson-2", content: "Tôi hiểu 6 vùng kiến thức cốt lõi của BABOK.", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-5", lessonId: "lesson-2", content: "Tôi nhớ được ít nhất 5 kỹ thuật chính được nhắc đến trong BABOK.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-6", lessonId: "lesson-2", content: "Tôi tự định vị được kỹ năng hiện tại của mình thuộc vùng kiến thức nào.", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 
-  // Lesson 3 Checklists
   { id: "c-7", lessonId: "lesson-3", content: "Tôi phân biệt được rạch ròi giữa Nhu cầu (Need) và Giải pháp (Solution).", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-8", lessonId: "lesson-3", content: "Tôi nắm được kỹ thuật đặt câu hỏi \"Tại sao\" để tìm về Problem gốc rễ.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-9", lessonId: "lesson-3", content: "Tôi biết cách viết một câu Requirement trung lập không lồng ghép giải pháp giao diện.", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 
-  // Lesson 4 Checklists
   { id: "c-10", lessonId: "lesson-4", content: "Tôi đã chuẩn bị được bộ câu hỏi có tính bao quát từ nghiệp vụ đến kỹ thuật.", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-11", lessonId: "lesson-4", content: "Tôi tránh được các câu hỏi đóng gây định kiến cho khách hàng.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-12", lessonId: "lesson-4", content: "Tôi biết cách phân loại các câu hỏi áp dụng cho người dùng cuối (User) và người quản lý (Manager).", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 
-  // Lesson 5 Checklists
   { id: "c-13", lessonId: "lesson-5", content: "Tôi đã viết đầy đủ các luồng ngoại lệ (Exceptions) cho tính năng.", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-14", lessonId: "lesson-5", content: "Tôi đã xác định rõ ràng tác nhân (Actor) và các điều kiện kích hoạt hệ thống.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-15", lessonId: "lesson-5", content: "Tôi mô tả các bước hành động một cách khách quan, rõ ràng, không tối nghĩa.", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 
-  // Lesson 6 Checklists
   { id: "c-16", lessonId: "lesson-6", content: "Tôi nhận diện được đâu là chính sách bên ngoài (Business Rule) và đâu là ràng buộc trên màn hình (Validation Rule).", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-17", lessonId: "lesson-6", content: "Tôi biết cách gom nhóm các Business Rules vào một bảng riêng để dễ bảo trì tài liệu.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-18", lessonId: "lesson-6", content: "Tôi viết rõ ràng các điều kiện đúng/sai để lập trình viên áp dụng nghiệp vụ.", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 
-  // Lesson 7 Checklists
   { id: "c-19", lessonId: "lesson-7", content: "Tôi áp dụng trôi chảy công thức Given-When-Then.", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-20", lessonId: "lesson-7", content: "Kịch bản của tôi bao trùm cả trường hợp thành công (Sunny day) và thất bại (Rainy day).", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-21", lessonId: "lesson-7", content: "Acceptance Criteria của tôi có thể kiểm thử trực quan được.", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 
-  // Lesson 8 Checklists
   { id: "c-22", lessonId: "lesson-8", content: "Tôi đã nắm được ý nghĩa của Pools và Lanes.", isChecked: false, order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-23", lessonId: "lesson-8", content: "Tôi biết cách dùng cổng rẽ nhánh Exclusive (X) và Parallel (+) hợp lý.", isChecked: false, order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
   { id: "c-24", lessonId: "lesson-8", content: "Sơ đồ nghiệp vụ của tôi có một điểm bắt đầu rõ ràng và các điểm kết thúc logic.", isChecked: false, order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
@@ -267,6 +270,7 @@ export class DBService {
   }
 
   private static saveDB(db: DatabaseSchema): void {
+    if (process.env.DATABASE_URL) return; // Prevent writing to JSON when on Prisma
     try {
       fs.writeFileSync(DB_FILE_PATH, JSON.stringify(db, null, 2), "utf-8");
     } catch (e) {
@@ -275,17 +279,56 @@ export class DBService {
   }
 
   // --- STAGES CRUD ---
-  public static getStages(): Stage[] {
+  public static async getStages(): Promise<Stage[]> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const stages = await prisma.stage.findMany({
+        orderBy: { order: "asc" }
+      });
+      return stages.map(s => ({
+        ...s,
+        createdAt: s.createdAt.toISOString(),
+        updatedAt: s.updatedAt.toISOString()
+      })) as Stage[];
+    }
     const db = this.loadDB();
     return db.stages.sort((a, b) => a.order - b.order);
   }
 
-  public static getStageById(id: string): Stage | null {
+  public static async getStageById(id: string): Promise<Stage | null> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const stage = await prisma.stage.findUnique({
+        where: { id }
+      });
+      if (!stage) return null;
+      return {
+        ...stage,
+        createdAt: stage.createdAt.toISOString(),
+        updatedAt: stage.updatedAt.toISOString()
+      } as Stage;
+    }
     const db = this.loadDB();
     return db.stages.find(s => s.id === id) || null;
   }
 
-  public static createStage(title: string, description: string, goal: string, order: number): Stage {
+  public static async createStage(title: string, description: string, goal: string, order: number): Promise<Stage> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const stage = await prisma.stage.create({
+        data: {
+          title,
+          description,
+          goal,
+          order: order || 0
+        }
+      });
+      return {
+        ...stage,
+        createdAt: stage.createdAt.toISOString(),
+        updatedAt: stage.updatedAt.toISOString()
+      } as Stage;
+    }
     const db = this.loadDB();
     const newStage: Stage = {
       id: "stage-" + generateUUID(),
@@ -301,7 +344,23 @@ export class DBService {
     return newStage;
   }
 
-  public static updateStage(id: string, updates: Partial<Omit<Stage, "id" | "createdAt" | "updatedAt">>): Stage | null {
+  public static async updateStage(id: string, updates: Partial<Omit<Stage, "id" | "createdAt" | "updatedAt">>): Promise<Stage | null> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        const stage = await prisma.stage.update({
+          where: { id },
+          data: updates
+        });
+        return {
+          ...stage,
+          createdAt: stage.createdAt.toISOString(),
+          updatedAt: stage.updatedAt.toISOString()
+        } as Stage;
+      } catch (e) {
+        return null;
+      }
+    }
     const db = this.loadDB();
     const index = db.stages.findIndex(s => s.id === id);
     if (index === -1) return null;
@@ -315,7 +374,18 @@ export class DBService {
     return db.stages[index];
   }
 
-  public static deleteStage(id: string): boolean {
+  public static async deleteStage(id: string): Promise<boolean> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        await prisma.stage.delete({
+          where: { id }
+        });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
     const db = this.loadDB();
     const originalLength = db.stages.length;
     db.stages = db.stages.filter(s => s.id !== id);
@@ -323,7 +393,6 @@ export class DBService {
     // Waterfall deletion
     db.lessons = db.lessons.filter(l => {
       if (l.stageId === id) {
-        // Also remove relative items
         db.checklistItems = db.checklistItems.filter(c => c.lessonId !== l.id);
         db.practices = db.practices.filter(p => p.lessonId !== l.id);
         return false;
@@ -336,7 +405,21 @@ export class DBService {
   }
 
   // --- LESSONS CRUD ---
-  public static getLessons(stageId?: string): Lesson[] {
+  public static async getLessons(stageId?: string): Promise<Lesson[]> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const condition = stageId ? { stageId } : {};
+      const lessons = await prisma.lesson.findMany({
+        where: condition,
+        orderBy: { order: "asc" }
+      });
+      return lessons.map(l => ({
+        ...l,
+        status: l.status as LessonStatus,
+        createdAt: l.createdAt.toISOString(),
+        updatedAt: l.updatedAt.toISOString()
+      })) as Lesson[];
+    }
     const db = this.loadDB();
     let lessons = db.lessons;
     if (stageId) {
@@ -345,12 +428,66 @@ export class DBService {
     return lessons.sort((a, b) => a.order - b.order);
   }
 
-  public static getLessonById(id: string): Lesson | null {
+  public static async getLessonById(id: string): Promise<Lesson | null> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const lesson = await prisma.lesson.findUnique({
+        where: { id }
+      });
+      if (!lesson) return null;
+      return {
+        ...lesson,
+        status: lesson.status as LessonStatus,
+        createdAt: lesson.createdAt.toISOString(),
+        updatedAt: lesson.updatedAt.toISOString()
+      } as Lesson;
+    }
     const db = this.loadDB();
     return db.lessons.find(l => l.id === id) || null;
   }
 
-  public static createLesson(lessonInput: Omit<Lesson, "id" | "createdAt" | "updatedAt" | "status" | "personalNote">, checklistText?: string): Lesson {
+  public static async createLesson(lessonInput: Omit<Lesson, "id" | "createdAt" | "updatedAt" | "status" | "personalNote">, checklistText?: string): Promise<Lesson> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const newLesson = await prisma.lesson.create({
+        data: {
+          stageId: lessonInput.stageId,
+          title: lessonInput.title,
+          order: lessonInput.order,
+          objective: lessonInput.objective,
+          theory: lessonInput.theory,
+          example: lessonInput.example,
+          exercise: lessonInput.exercise,
+          realProjectApplication: lessonInput.realProjectApplication,
+          expectedOutput: lessonInput.expectedOutput,
+          status: "NOT_STARTED",
+          personalNote: ""
+        }
+      });
+
+      if (checklistText) {
+        const lines = checklistText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        for (let i = 0; i < lines.length; i++) {
+          const content = lines[i].replace(/^[-\*\s\d\.\)]+/, "").trim();
+          await prisma.checklistItem.create({
+            data: {
+              lessonId: newLesson.id,
+              content,
+              isChecked: false,
+              order: i + 1
+            }
+          });
+        }
+      }
+
+      return {
+        ...newLesson,
+        status: newLesson.status as LessonStatus,
+        createdAt: newLesson.createdAt.toISOString(),
+        updatedAt: newLesson.updatedAt.toISOString()
+      } as Lesson;
+    }
+
     const db = this.loadDB();
     const newId = "lesson-" + generateUUID();
     const newLesson: Lesson = {
@@ -363,12 +500,10 @@ export class DBService {
     };
     db.lessons.push(newLesson);
 
-    // Initial check list creation
     if (checklistText) {
-      // Split by new line, remove empty items
       const lines = checklistText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
       lines.forEach((line, index) => {
-        const content = line.replace(/^[-\*\s\d\.\)]+/, "").trim(); // strip leading bullet points
+        const content = line.replace(/^[-\*\s\d\.\)]+/, "").trim();
         db.checklistItems.push({
           id: "checklist-" + generateUUID(),
           lessonId: newId,
@@ -385,7 +520,38 @@ export class DBService {
     return newLesson;
   }
 
-  public static updateLesson(id: string, updates: Partial<Omit<Lesson, "id" | "createdAt" | "updatedAt">>): Lesson | null {
+  public static async updateLesson(id: string, updates: Partial<Omit<Lesson, "id" | "createdAt" | "updatedAt">>): Promise<Lesson | null> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        const parsedUpdates: any = {};
+        if (updates.stageId !== undefined) parsedUpdates.stageId = updates.stageId;
+        if (updates.title !== undefined) parsedUpdates.title = updates.title;
+        if (updates.order !== undefined) parsedUpdates.order = updates.order;
+        if (updates.objective !== undefined) parsedUpdates.objective = updates.objective;
+        if (updates.theory !== undefined) parsedUpdates.theory = updates.theory;
+        if (updates.example !== undefined) parsedUpdates.example = updates.example;
+        if (updates.exercise !== undefined) parsedUpdates.exercise = updates.exercise;
+        if (updates.realProjectApplication !== undefined) parsedUpdates.realProjectApplication = updates.realProjectApplication;
+        if (updates.expectedOutput !== undefined) parsedUpdates.expectedOutput = updates.expectedOutput;
+        if (updates.status !== undefined) parsedUpdates.status = updates.status;
+        if (updates.personalNote !== undefined) parsedUpdates.personalNote = updates.personalNote;
+
+        const lesson = await prisma.lesson.update({
+          where: { id },
+          data: parsedUpdates
+        });
+        return {
+          ...lesson,
+          status: lesson.status as LessonStatus,
+          createdAt: lesson.createdAt.toISOString(),
+          updatedAt: lesson.updatedAt.toISOString()
+        } as Lesson;
+      } catch (e) {
+        return null;
+      }
+    }
+
     const db = this.loadDB();
     const index = db.lessons.findIndex(l => l.id === id);
     if (index === -1) return null;
@@ -399,12 +565,23 @@ export class DBService {
     return db.lessons[index];
   }
 
-  public static deleteLesson(id: string): boolean {
+  public static async deleteLesson(id: string): Promise<boolean> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        await prisma.lesson.delete({
+          where: { id }
+        });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
     const db = this.loadDB();
     const originalLength = db.lessons.length;
     db.lessons = db.lessons.filter(l => l.id !== id);
     
-    // Clean associated lists
     db.checklistItems = db.checklistItems.filter(c => c.lessonId !== id);
     db.practices = db.practices.filter(p => p.lessonId !== id);
 
@@ -413,12 +590,43 @@ export class DBService {
   }
 
   // --- CHECKLIST CRUD ---
-  public static getChecklistItems(lessonId: string): ChecklistItem[] {
+  public static async getChecklistItems(lessonId: string): Promise<ChecklistItem[]> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const items = await prisma.checklistItem.findMany({
+        where: { lessonId },
+        orderBy: { order: "asc" }
+      });
+      return items.map(c => ({
+        ...c,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString()
+      })) as ChecklistItem[];
+    }
+
     const db = this.loadDB();
     return db.checklistItems.filter(c => c.lessonId === lessonId).sort((a, b) => a.order - b.order);
   }
 
-  public static createChecklistItem(lessonId: string, content: string, order?: number): ChecklistItem {
+  public static async createChecklistItem(lessonId: string, content: string, order?: number): Promise<ChecklistItem> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const count = await prisma.checklistItem.count({ where: { lessonId } });
+      const item = await prisma.checklistItem.create({
+        data: {
+          lessonId,
+          content,
+          isChecked: false,
+          order: order || (count + 1)
+        }
+      });
+      return {
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString()
+      } as ChecklistItem;
+    }
+
     const db = this.loadDB();
     const nextOrder = order || (db.checklistItems.filter(c => c.lessonId === lessonId).length + 1);
     const newItem: ChecklistItem = {
@@ -435,7 +643,24 @@ export class DBService {
     return newItem;
   }
 
-  public static updateChecklistItem(id: string, content: string): ChecklistItem | null {
+  public static async updateChecklistItem(id: string, content: string): Promise<ChecklistItem | null> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        const item = await prisma.checklistItem.update({
+          where: { id },
+          data: { content }
+        });
+        return {
+          ...item,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString()
+        } as ChecklistItem;
+      } catch (e) {
+        return null;
+      }
+    }
+
     const db = this.loadDB();
     const index = db.checklistItems.findIndex(c => c.id === id);
     if (index === -1) return null;
@@ -446,7 +671,26 @@ export class DBService {
     return db.checklistItems[index];
   }
 
-  public static toggleChecklistItem(id: string): ChecklistItem | null {
+  public static async toggleChecklistItem(id: string): Promise<ChecklistItem | null> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        const current = await prisma.checklistItem.findUnique({ where: { id } });
+        if (!current) return null;
+        const item = await prisma.checklistItem.update({
+          where: { id },
+          data: { isChecked: !current.isChecked }
+        });
+        return {
+          ...item,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString()
+        } as ChecklistItem;
+      } catch (e) {
+        return null;
+      }
+    }
+
     const db = this.loadDB();
     const index = db.checklistItems.findIndex(c => c.id === id);
     if (index === -1) return null;
@@ -457,7 +701,17 @@ export class DBService {
     return db.checklistItems[index];
   }
 
-  public static deleteChecklistItem(id: string): boolean {
+  public static async deleteChecklistItem(id: string): Promise<boolean> {
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        await prisma.checklistItem.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
     const db = this.loadDB();
     const lenBefore = db.checklistItems.length;
     db.checklistItems = db.checklistItems.filter(c => c.id !== id);
@@ -466,11 +720,25 @@ export class DBService {
   }
 
   // Bulk update / sync checklists for edit form
-  public static syncChecklistItems(lessonId: string, lines: string[]): void {
+  public static async syncChecklistItems(lessonId: string, lines: string[]): Promise<void> {
+    const prisma = getPrisma();
+    if (prisma) {
+      await prisma.checklistItem.deleteMany({ where: { lessonId } });
+      for (let i = 0; i < lines.length; i++) {
+        await prisma.checklistItem.create({
+          data: {
+            lessonId,
+            content: lines[i],
+            isChecked: false,
+            order: i + 1
+          }
+        });
+      }
+      return;
+    }
+
     const db = this.loadDB();
-    // Delete existing ones
     db.checklistItems = db.checklistItems.filter(c => c.lessonId !== lessonId);
-    // Add new ones
     lines.forEach((line, index) => {
       db.checklistItems.push({
         id: "checklist-" + generateUUID(),
@@ -486,11 +754,32 @@ export class DBService {
   }
 
   // --- PRACTICE / LESSON WORKSPACE WORK ---
-  public static getPracticeByLesson(lessonId: string): Practice {
+  public static async getPracticeByLesson(lessonId: string): Promise<Practice> {
+    const prisma = getPrisma();
+    if (prisma) {
+      let practice = await prisma.practice.findFirst({
+        where: { lessonId }
+      });
+      if (!practice) {
+        practice = await prisma.practice.create({
+          data: {
+            lessonId,
+            projectName: "",
+            content: "",
+            reflection: ""
+          }
+        });
+      }
+      return {
+        ...practice,
+        createdAt: practice.createdAt.toISOString(),
+        updatedAt: practice.updatedAt.toISOString()
+      } as Practice;
+    }
+
     const db = this.loadDB();
     let practice = db.practices.find(p => p.lessonId === lessonId);
     if (!practice) {
-      // Lazy creation of practice
       practice = {
         id: "practice-" + generateUUID(),
         lessonId,
@@ -506,7 +795,40 @@ export class DBService {
     return practice;
   }
 
-  public static savePractice(lessonId: string, projectName: string, content: string, reflection: string): Practice {
+  public static async savePractice(lessonId: string, projectName: string, content: string, reflection: string): Promise<Practice> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const practice = await prisma.practice.findFirst({
+        where: { lessonId }
+      });
+
+      const pData = {
+        projectName,
+        content,
+        reflection
+      };
+
+      let result;
+      if (!practice) {
+        result = await prisma.practice.create({
+          data: {
+            lessonId,
+            ...pData
+          }
+        });
+      } else {
+        result = await prisma.practice.update({
+          where: { id: practice.id },
+          data: pData
+        });
+      }
+      return {
+        ...result,
+        createdAt: result.createdAt.toISOString(),
+        updatedAt: result.updatedAt.toISOString()
+      } as Practice;
+    }
+
     const db = this.loadDB();
     const index = db.practices.findIndex(p => p.lessonId === lessonId);
     
@@ -538,19 +860,74 @@ export class DBService {
   }
 
   // --- DASHBOARD / STATS METRICS ---
-  public static getDashboardStats() {
+  public static async getDashboardStats(): Promise<any> {
+    const prisma = getPrisma();
+    if (prisma) {
+      const totalStages = await prisma.stage.count();
+      const totalLessons = await prisma.lesson.count();
+      const completedLessons = await prisma.lesson.count({
+        where: { status: "COMPLETED" }
+      });
+      const inProgressLessons = await prisma.lesson.count({
+        where: { status: "IN_PROGRESS" }
+      });
+
+      const recentLessonsRaw = await prisma.lesson.findMany({
+        orderBy: { updatedAt: "desc" },
+        take: 3
+      });
+      const recentLessons = recentLessonsRaw.map(l => ({
+        ...l,
+        status: l.status as LessonStatus,
+        createdAt: l.createdAt.toISOString(),
+        updatedAt: l.updatedAt.toISOString()
+      }));
+
+      const stages = await prisma.stage.findMany({
+        orderBy: { order: "asc" }
+      });
+
+      const stageProgress = [];
+      for (const stage of stages) {
+        const sTotal = await prisma.lesson.count({ where: { stageId: stage.id } });
+        const sCompleted = await prisma.lesson.count({
+          where: { stageId: stage.id, status: "COMPLETED" }
+        });
+        const sInProgress = await prisma.lesson.count({
+          where: { stageId: stage.id, status: "IN_PROGRESS" }
+        });
+        const percentage = sTotal > 0 ? Math.round((sCompleted / sTotal) * 100) : 0;
+
+        stageProgress.push({
+          stageId: stage.id,
+          stageTitle: stage.title,
+          totalLessons: sTotal,
+          completedLessons: sCompleted,
+          inProgressLessons: sInProgress,
+          percentage
+        });
+      }
+
+      return {
+        totalStages,
+        totalLessons,
+        completedLessons,
+        inProgressLessons,
+        recentLessons,
+        stageProgress
+      };
+    }
+
     const db = this.loadDB();
     const totalStages = db.stages.length;
     const totalLessons = db.lessons.length;
     const completedLessons = db.lessons.filter(l => l.status === LessonStatus.COMPLETED).length;
     const inProgressLessons = db.lessons.filter(l => l.status === LessonStatus.IN_PROGRESS).length;
 
-    // Last 3 updated/created lessons
     const recentLessons = [...db.lessons]
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 3);
 
-    // Calculate progress details per stage
     const stageProgress = db.stages.map(stage => {
       const stageLessons = db.lessons.filter(l => l.stageId === stage.id);
       const sTotal = stageLessons.length;
