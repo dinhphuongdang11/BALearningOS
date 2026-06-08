@@ -19,7 +19,7 @@ export default function Sidebar({ currentView, onNavigate, completedCount, total
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800 shrink-0 h-screen sticky top-0" id="app-sidebar">
+    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800 shrink-0 h-screen sticky top-0 font-sans" id="app-sidebar">
       {/* Brand Header */}
       <div className="p-6 border-b border-slate-800 flex items-center space-x-3">
         <div className="p-2 bg-emerald-500 rounded-lg text-slate-900 font-bold shadow-md shadow-emerald-500/10">

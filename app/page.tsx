@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from "react";
-import Sidebar from "./components/Sidebar.tsx";
-import DashboardView from "./components/DashboardView.tsx";
-import StagesView from "./components/StagesView.tsx";
-import StageDetailView from "./components/StageDetailView.tsx";
-import LessonDetailView from "./components/LessonDetailView.tsx";
-import LessonFormView from "./components/LessonFormView.tsx";
-import LessonManagerView from "./components/LessonManagerView.tsx";
+"use client";
 
-import { AppAPI } from "./lib/api.ts";
-import { Stage, Lesson, LessonStatus } from "./types.ts";
-import { Compass, BookOpen, AlertCircle, Sparkles } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import Sidebar from "../components/Sidebar";
+import DashboardView from "../components/DashboardView";
+import StagesView from "../components/StagesView";
+import StageDetailView from "../components/StageDetailView";
+import LessonDetailView from "../components/LessonDetailView";
+import LessonFormView from "../components/LessonFormView";
+import LessonManagerView from "../components/LessonManagerView";
+
+import { AppAPI } from "../lib/api";
+import { Stage, Lesson } from "../lib/types";
+import { Sparkles, AlertCircle } from "lucide-react";
 
 export default function App() {
   // Navigation Routing States
@@ -113,7 +115,6 @@ export default function App() {
       // Navigate back
       if (activeStageId) {
         // If we created/edited from a Stage, return there
-        const detailedStage = await AppAPI.getStageDetails(activeStageId);
         setCurrentView("stage-detail");
       } else {
         setCurrentView("lessons-manager");
@@ -175,21 +176,21 @@ export default function App() {
       return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3 text-slate-400" id="global-spinner">
           <Sparkles className="w-12 h-12 animate-spin text-emerald-500" />
-          <h3 className="text-base font-bold text-slate-700">Đang khởi tạo hệ thống BA Learning OS...</h3>
-          <p className="text-xs text-slate-400">Loading your Business Analysis roadmap</p>
+          <h3 className="text-base font-bold text-slate-100">Đang khởi tạo hệ thống BA Learning OS...</h3>
+          <p className="text-xs text-slate-500">Loading your Business Analysis roadmap</p>
         </div>
       );
     }
 
     if (error) {
       return (
-        <div className="max-w-md mx-auto my-12 bg-rose-50 border border-rose-200 p-6 rounded-xl text-center space-y-4" id="global-error-card">
+        <div className="max-w-md mx-auto my-12 bg-slate-900 border border-slate-800 p-6 rounded-xl text-center space-y-4" id="global-error-card">
           <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
-          <h3 className="text-base font-bold text-rose-800">Không thể kết nối Cơ sở dữ liệu</h3>
-          <p className="text-xs text-rose-600 font-medium leading-relaxed">{error}</p>
+          <h3 className="text-base font-bold text-slate-200">Không thể kết nối Cơ sở dữ liệu</h3>
+          <p className="text-xs text-rose-450 font-medium leading-relaxed">{error}</p>
           <button
             onClick={loadAppData}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
           >
             Thử tải lại dữ liệu
           </button>
@@ -306,7 +307,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-700 antialiased" id="main-layout-root">
+    <div className="flex min-h-screen bg-slate-950 font-sans text-slate-300 antialiased" id="main-layout-root">
       {/* Sidebar navigation panel */}
       <Sidebar
         currentView={currentView}

@@ -1,6 +1,5 @@
-import { Stage, Lesson, ChecklistItem, Practice, LessonStatus } from "../types.js";
+import { Stage, Lesson, ChecklistItem, Practice } from "./types";
 
-// Fetch configurations
 const API_BASE = "/api";
 
 export async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -73,7 +72,7 @@ export const AppAPI = {
   },
 
   // 4. Patches
-  patchLessonStatus: async (id: string, status: LessonStatus) => {
+  patchLessonStatus: async (id: string, status: string) => {
     return fetchJson<Lesson>(`${API_BASE}/lessons/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
