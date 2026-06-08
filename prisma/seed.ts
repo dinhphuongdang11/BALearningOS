@@ -3,61 +3,69 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding BA Learning OS database...');
+  // 1. Clear old data in the correct logical/fk order
+  console.log('Cleaning old seed data...');
+  await prisma.practice.deleteMany({});
+  await prisma.checklistItem.deleteMany({});
+  await prisma.lesson.deleteMany({});
+  await prisma.stage.deleteMany({});
 
-  // Set up 6 stages
+  // 2. Create exact 6 Stages
+  console.log('Creating stages...');
   const stagesData = [
     {
-      title: '1. Xây bản đồ nghề BA',
+      title: 'Xây bản đồ nghề BA',
       description: 'Tìm hiểu tổng quan về nghề Business Analyst, các kỹ năng cần thiết và xây dựng định hướng sự nghiệp.',
       goal: 'Hiểu rõ các vai trò của BA trong dự án, cấu trúc của chuẩn nghề nghiệp BABOK và lộ trình phát triển của bản thân.',
       order: 1,
     },
     {
-      title: '2. Xây lõi tư duy phân tích',
+      title: 'Xây lõi tư duy phân tích',
       description: 'Luyện tập tư duy phân tách vấn đề, phân tích nguyên nhân gốc rễ và liên kết Problem - Need - Solution.',
       goal: 'Làm chủ kỹ thuật xương cá, 5 Whys, phân biệt được vấn đề thực sự của doanh nghiệp và mong muốn giải pháp.',
       order: 2,
     },
     {
-      title: '3. Khai thác và làm rõ yêu cầu',
+      title: 'Khai thác và làm rõ yêu cầu',
       description: 'Học cách giao tiếp, đặt câu hỏi phỏng vấn, workshop định hướng và thu thập thông tin từ stakeholder.',
       goal: 'Lên kế hoạch khơi gợi yêu cầu hiệu quả, bộ câu hỏi phỏng vấn tối ưu và ghi chép tóm tắt biên bản họp chuẩn xác.',
       order: 3,
     },
     {
-      title: '4. Viết requirement và tài liệu',
+      title: 'Viết requirement và tài liệu',
       description: 'Viết tài liệu đặc tả yêu cầu chi tiết (SRS, User Story), định nghĩa Business Rule và điều kiện nghiệm thu (Acceptance Criteria).',
       goal: 'Soạn thảo tài liệu đặc tả chức năng rõ ràng, không mơ hồ, giúp Dev phát triển và Tester xây dựng kịch bản kiểm thử dễ dàng.',
       order: 4,
     },
     {
-      title: '5. Mô hình hóa nghiệp vụ',
+      title: 'Mô hình hóa nghiệp vụ',
       description: 'Vẽ sơ đồ quy trình nghiệp vụ (BPMN), Use Case Diagram, Activity Diagram để mô tả luồng xử lý trực quan.',
       goal: 'Sử dụng thành thạo BPMN 2.0 để mô hình hóa toàn bộ nghiệp vụ hiện tại (As-is) và cải tiến tương lai (To-be).',
       order: 5,
     },
     {
-      title: '6. Support Dev/Test/UAT và quản lý thay đổi',
+      title: 'Support Dev/Test/UAT và quản lý thay đổi',
       description: 'Hỗ trợ đội ngũ lập trình, kiểm thử và đồng hành cùng khách hàng trong kiểm thử nghiệm thu (UAT), kiểm soát sự thay đổi của yêu cầu.',
       goal: 'Giải quyết xung đột yêu cầu, viết biên bản nghiệm thu UAT kỹ lưỡng và quản lý quy trình Change Request chuyên nghiệp.',
       order: 6,
     },
   ];
 
-  const stages = [];
+  // We assign stages to an order-indexed map for lesson linking
+  const stagesMap = new Map<number, any>();
   for (const item of stagesData) {
     const s = await prisma.stage.create({
       data: item,
     });
-    stages.push(s);
+    stagesMap.set(item.order, s);
     console.log(`Created Stage: ${s.title}`);
   }
 
-  // Pre-defined sample lessons
+  // 3. Create Sample Lessons
+  console.log('Creating lessons...');
   const lessonsData = [
     {
-      stageIdx: 0, // Xây bản đồ nghề BA
+      stageOrder: 1, // Xây bản đồ nghề BA
       title: 'BA là gì?',
       order: 1,
       objective: 'Hiểu đúng về định nghĩa Business Analyst, phân loại BA và vai trò cụ thể trong vòng đời phát triển phần mềm (SDLC).',
@@ -73,8 +81,8 @@ async function main() {
       ]
     },
     {
-      stageIdx: 0, // Xây bản đồ nghề BA
-      title: 'BABOK Overview',
+      stageOrder: 1, // Xây bản đồ nghề BA
+      title: 'BABOK overview',
       order: 2,
       objective: 'Làm quen với cấu trúc Sách Hướng dẫn chuẩn Kiến thức Phân tích Nghiệp vụ (BABOK v3) và 6 Vùng Kiến thức chính.',
       theory: 'BABOK Guide là tài liệu chuẩn toàn cầu cho nghề BA do IIBA phát triển. Nó bao gồm 6 Vùng Kiến thức (Knowledge Areas): 1. Business Analysis Planning & Monitoring, 2. Elicitation & Collaboration, 3. Requirements Life Cycle Management, 4. Strategy Analysis, 5. Requirements Analysis & Design Definition, 6. Solution Evaluation.',
@@ -89,7 +97,7 @@ async function main() {
       ]
     },
     {
-      stageIdx: 1, // Xây lõi tư duy phân tích
+      stageOrder: 2, // Xây lõi tư duy phân tích
       title: 'Problem - Need - Requirement - Solution',
       order: 1,
       objective: 'Phân biệt rõ ràng 4 khái niệm kinh điển giúp BA tư duy sâu sắc, tránh nhầm lẫn giữa giải pháp mong muốn và yêu cầu cốt lõi.',
@@ -105,7 +113,7 @@ async function main() {
       ]
     },
     {
-      stageIdx: 2, // Khai thác và làm rõ yêu cầu
+      stageOrder: 3, // Khai thác và làm rõ yêu cầu
       title: 'Bộ câu hỏi khai thác yêu cầu',
       order: 1,
       objective: 'Thiết lập bộ khung câu hỏi chất vấn thông minh (Elicitation Questions) áp dụng cho mọi buổi phỏng vấn Stakeholder.',
@@ -121,7 +129,7 @@ async function main() {
       ]
     },
     {
-      stageIdx: 3, // Viết requirement và tài liệu
+      stageOrder: 4, // Viết requirement và tài liệu
       title: 'Cấu trúc một chức năng SRS',
       order: 1,
       objective: 'Nắm vững cấu trúc chuẩn mực khi mô tả chi tiết một tính năng/chức năng phần mềm trong tài liệu SRS (Software Requirement Specification).',
@@ -137,7 +145,7 @@ async function main() {
       ]
     },
     {
-      stageIdx: 3, // Viết requirement và tài liệu
+      stageOrder: 4, // Viết requirement và tài liệu
       title: 'Business Rule và Validation Rule',
       order: 2,
       objective: 'Phân biệt chính xác Luật nghiệp vụ (Business Rule) mang tính chất sống còn của doanh nghiệp với Quy tắc kiểm tra tính hợp lệ dữ liệu nhập (Validation Rule).',
@@ -153,7 +161,7 @@ async function main() {
       ]
     },
     {
-      stageIdx: 3, // Viết requirement và tài liệu
+      stageOrder: 4, // Viết requirement và tài liệu
       title: 'Acceptance Criteria',
       order: 3,
       objective: 'Viết tiêu chí nghiệm thu (Acceptance Criteria - AC) chuẩn mực dùng cho User Story, giúp Developer tự tin lập trình và Tester kiểm thử.',
@@ -169,7 +177,7 @@ async function main() {
       ]
     },
     {
-      stageIdx: 4, // Mô hình hóa nghiệp vụ
+      stageOrder: 5, // Mô hình hóa nghiệp vụ
       title: 'BPMN cơ bản',
       order: 1,
       objective: 'Sử dụng chuẩn BPMN (Business Process Model and Notation) để biểu diễn dòng chảy nghiệp vụ từ đầu đến cuối một cách chuyên nghiệp.',
@@ -187,7 +195,12 @@ async function main() {
   ];
 
   for (const item of lessonsData) {
-    const s = stages[item.stageIdx];
+    const s = stagesMap.get(item.stageOrder);
+    if (!s) {
+      console.warn(`No stage found with order ${item.stageOrder} for lesson ${item.title}`);
+      continue;
+    }
+
     const l = await prisma.lesson.create({
       data: {
         stageId: s.id,
@@ -219,7 +232,7 @@ async function main() {
     }
   }
 
-  console.log('Seeding successful! Database is now loaded.');
+  console.log('Seed completed.');
 }
 
 main()
