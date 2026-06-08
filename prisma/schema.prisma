@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LessonStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Stage {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  goal        String
+  order       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id                     String         @id @default(uuid())
+  stageId                String
+  stage                  Stage          @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  title                  String
+  order                  Int
+  objective              String
+  theory                 String
+  example                String
+  exercise               String
+  realProjectApplication String
+  expectedOutput         String
+  status                 LessonStatus   @default(NOT_STARTED)
+  personalNote           String         @default("")
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  checklistItems         ChecklistItem[]
+  practices              Practice[]
+}
+
+model ChecklistItem {
+  id        String   @id @default(uuid())
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  content   String
+  isChecked Boolean  @default(false)
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Practice {
+  id          String   @id @default(uuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  projectName String   @default("")
+  content     String   @default("")
+  reflection  String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
