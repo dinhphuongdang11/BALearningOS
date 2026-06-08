@@ -3,66 +3,79 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  // 1. Clear old data in the correct logical/fk order
-  console.log('Cleaning old seed data...');
-  await prisma.practice.deleteMany({});
-  await prisma.checklistItem.deleteMany({});
-  await prisma.lesson.deleteMany({});
-  await prisma.stage.deleteMany({});
-
-  // 2. Create exact 6 Stages
-  console.log('Creating stages...');
+  // 1. Safe setup of Stages
+  console.log('Checking default stages...');
   const stagesData = [
     {
       title: 'Xây bản đồ nghề BA',
-      description: 'Tìm hiểu tổng quan về nghề Business Analyst, các kỹ năng cần thiết và xây dựng định hướng sự nghiệp.',
-      goal: 'Hiểu rõ các vai trò của BA trong dự án, cấu trúc của chuẩn nghề nghiệp BABOK và lộ trình phát triển của bản thân.',
+      description: 'Tìm hiểu tổng quan về nghề Business Analyst, các kỹ năng cần thiết và định hướng phát triển nghề nghiệp.',
+      goal: 'Hiểu rõ vai trò của BA trong dự án, cấu trúc chuẩn nghề nghiệp BABOK và lộ trình phát triển cá nhân.',
       order: 1,
     },
     {
       title: 'Xây lõi tư duy phân tích',
-      description: 'Luyện tập tư duy phân tách vấn đề, phân tích nguyên nhân gốc rễ và liên kết Problem - Need - Solution.',
-      goal: 'Làm chủ kỹ thuật xương cá, 5 Whys, phân biệt được vấn đề thực sự của doanh nghiệp và mong muốn giải pháp.',
+      description: 'Luyện tập tư duy phân tích vấn đề, phân tích nguyên nhân gốc rễ và liên kết Problem - Need - Requirement - Solution.',
+      goal: 'Biết phân biệt vấn đề, nhu cầu, yêu cầu và giải pháp; biết phân tích nguyên nhân gốc rễ.',
       order: 2,
     },
     {
       title: 'Khai thác và làm rõ yêu cầu',
       description: 'Học cách giao tiếp, đặt câu hỏi phỏng vấn, workshop định hướng và thu thập thông tin từ stakeholder.',
-      goal: 'Lên kế hoạch khơi gợi yêu cầu hiệu quả, bộ câu hỏi phỏng vấn tối ưu và ghi chép tóm tắt biên bản họp chuẩn xác.',
+      goal: 'Biết chuẩn bị câu hỏi, khai thác thông tin, xác nhận hiểu biết và ghi nhận quyết định sau buổi làm việc.',
       order: 3,
     },
     {
       title: 'Viết requirement và tài liệu',
-      description: 'Viết tài liệu đặc tả yêu cầu chi tiết (SRS, User Story), định nghĩa Business Rule và điều kiện nghiệm thu (Acceptance Criteria).',
-      goal: 'Soạn thảo tài liệu đặc tả chức năng rõ ràng, không mơ hồ, giúp Dev phát triển và Tester xây dựng kịch bản kiểm thử dễ dàng.',
+      description: 'Học cách đặc tả yêu cầu, viết SRS/PRD, mô tả chức năng, business rule, validation rule và acceptance criteria.',
+      goal: 'Viết được requirement rõ ràng, đầy đủ thông tin để Dev/Test có thể hiểu và triển khai.',
       order: 4,
     },
     {
       title: 'Mô hình hóa nghiệp vụ',
-      description: 'Vẽ sơ đồ quy trình nghiệp vụ (BPMN), Use Case Diagram, Activity Diagram để mô tả luồng xử lý trực quan.',
-      goal: 'Sử dụng thành thạo BPMN 2.0 để mô hình hóa toàn bộ nghiệp vụ hiện tại (As-is) và cải tiến tương lai (To-be).',
+      description: 'Học cách mô hình hóa quy trình nghiệp vụ bằng BPMN, activity diagram, use case, context diagram và state diagram.',
+      goal: 'Biết bóc tách hệ thống lớn, mô tả business process và vẽ diagram phục vụ phân tích yêu cầu.',
       order: 5,
     },
     {
       title: 'Support Dev/Test/UAT và quản lý thay đổi',
-      description: 'Hỗ trợ đội ngũ lập trình, kiểm thử và đồng hành cùng khách hàng trong kiểm thử nghiệm thu (UAT), kiểm soát sự thay đổi của yêu cầu.',
-      goal: 'Giải quyết xung đột yêu cầu, viết biên bản nghiệm thu UAT kỹ lưỡng và quản lý quy trình Change Request chuyên nghiệp.',
+      description: 'Học cách hỗ trợ Dev/Test/UAT, trả lời expected result, phân tích bug/change request và đánh giá impact.',
+      goal: 'Biết support triển khai, kiểm thử, nghiệm thu và quản lý thay đổi yêu cầu trong dự án thật.',
       order: 6,
     },
   ];
 
   // We assign stages to an order-indexed map for lesson linking
   const stagesMap = new Map<number, any>();
+
   for (const item of stagesData) {
-    const s = await prisma.stage.create({
-      data: item,
+    const existingStage = await prisma.stage.findUnique({
+      where: { order: item.order },
     });
-    stagesMap.set(item.order, s);
-    console.log(`Created Stage: ${s.title}`);
+
+    if (existingStage) {
+      // Stage already exists - update details to guarantee mapping is synchronized but preserve DB entity
+      const updatedStage = await prisma.stage.update({
+        where: { id: existingStage.id },
+        data: {
+          title: item.title,
+          description: item.description,
+          goal: item.goal,
+        },
+      });
+      stagesMap.set(item.order, updatedStage);
+      console.log(`Stage already exists: ${item.title}`);
+    } else {
+      // Create new stage
+      const newStage = await prisma.stage.create({
+        data: item,
+      });
+      stagesMap.set(item.order, newStage);
+      console.log(`Created stage: ${item.title}`);
+    }
   }
 
-  // 3. Create Sample Lessons
-  console.log('Creating lessons...');
+  // 2. Safe setup of Lessons
+  console.log('Checking sample lessons...');
   const lessonsData = [
     {
       stageOrder: 1, // Xây bản đồ nghề BA
@@ -201,38 +214,50 @@ async function main() {
       continue;
     }
 
-    const l = await prisma.lesson.create({
-      data: {
+    const existingLesson = await prisma.lesson.findFirst({
+      where: {
         stageId: s.id,
         title: item.title,
-        order: item.order,
-        objective: item.objective,
-        theory: item.theory,
-        example: item.example,
-        exercise: item.exercise,
-        realProjectApplication: item.realProjectApplication,
-        expectedOutput: item.expectedOutput,
-        status: 'NOT_STARTED',
-        personalNote: '',
-      },
+      }
     });
 
-    console.log(`  Added Lesson: ${l.title}`);
-
-    // Create checklist items
-    for (let cIdx = 0; cIdx < item.checklist.length; cIdx++) {
-      await prisma.checklistItem.create({
+    if (existingLesson) {
+      console.log(`Lesson already exists, skipped: ${item.title}`);
+    } else {
+      // Create new lesson
+      const l = await prisma.lesson.create({
         data: {
-          lessonId: l.id,
-          content: item.checklist[cIdx],
-          isChecked: false,
-          order: cIdx + 1,
-        }
+          stageId: s.id,
+          title: item.title,
+          order: item.order,
+          objective: item.objective,
+          theory: item.theory,
+          example: item.example,
+          exercise: item.exercise,
+          realProjectApplication: item.realProjectApplication,
+          expectedOutput: item.expectedOutput,
+          status: 'NOT_STARTED',
+          personalNote: '',
+        },
       });
+
+      console.log(`Created lesson: ${item.title}`);
+
+      // Create checklist items if it is newly created
+      for (let cIdx = 0; cIdx < item.checklist.length; cIdx++) {
+        await prisma.checklistItem.create({
+          data: {
+            lessonId: l.id,
+            content: item.checklist[cIdx],
+            isChecked: false,
+            order: cIdx + 1,
+          }
+        });
+      }
     }
   }
 
-  console.log('Seed completed.');
+  console.log('Safe seed completed. No user data was deleted.');
 }
 
 main()

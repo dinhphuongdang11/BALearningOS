@@ -57,6 +57,11 @@ Mặc dù MVP chạy trên sqlite/file để mượt mà nhất trong sandbox, m
    npx prisma db seed
    ```
 
+> [!WARNING]
+> **CẢNH BÁO BẢO TRÌ DỮ LIỆU THỰC TẾ:**
+> - Tuyệt đối không viết thêm các mã lệnh `deleteMany()` hoặc xóa bảng vào file `prisma/seed.ts` khi hệ thống đã đi vào vận hành chính thức hoặc có dữ liệu học tập thực tế của người dùng.
+> - Phiên bản seed hiện tại là **safe seed (seed an toàn)**. Lệnh seed này có thể chạy lập lại nhiều lần hoàn toàn độc lập mà **không xóa dữ liệu đã học**, không reset check các danh mục học viên đã phản hồi, và giữ nguyên vẹn ghi chú thực hành `Practice` / `personalNote`.
+
 ### Bước 4: Khởi phát Project ở chế độ Local Dev
 Khởi chạy server Express làm backend API (cổng 3000) kiêm Vite làm hot-reload frontend:
 ```bash

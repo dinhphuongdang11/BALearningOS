@@ -21,7 +21,7 @@ model Stage {
   title       String
   description String
   goal        String
-  order       Int
+  order       Int      @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   lessons     Lesson[]
@@ -45,6 +45,8 @@ model Lesson {
   updatedAt              DateTime       @updatedAt
   checklistItems         ChecklistItem[]
   practices              Practice[]
+
+  @@unique([stageId, title])
 }
 
 model ChecklistItem {
