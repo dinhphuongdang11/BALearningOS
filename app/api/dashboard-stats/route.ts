@@ -10,101 +10,68 @@ export async function GET(req: Request) {
     const stageFilter = includeDrafts ? {} : { status: "PUBLISHED" as const };
     const lessonFilter = includeDrafts ? {} : { status: "PUBLISHED" as const };
 
-    const totalStages = await prisma.stage.count({ where: stageFilter });
-    const totalLessons = await prisma.lesson.count({ where: lessonFilter });
+    // Fetch data in parallel to reduce latency, resolving potential N+1 query structures
+    const [stages, lessons, progressList] = await Promise.all([
+      prisma.stage.findMany({
+        where: stageFilter,
+        orderBy: { order: "asc" }
+      }),
+      prisma.lesson.findMany({
+        where: lessonFilter,
+        orderBy: { updatedAt: "desc" }
+      }),
+      prisma.progress.findMany()
+    ]);
 
-    // Count completed and in-progress based on the unified Progress model
-    const completedLessons = await prisma.progress.count({
-      where: {
-        entityType: "LESSON",
-        status: "COMPLETED",
-        entityId: {
-          in: (await prisma.lesson.findMany({ where: lessonFilter, select: { id: true } })).map(l => l.id)
-        }
+    const totalStages = stages.length;
+    const totalLessons = lessons.length;
+
+    const activeLessonIds = new Set(lessons.map(l => l.id));
+
+    // Calculate completed and in-progress status lists in-memory
+    const completedLessons = progressList.filter(
+      p => p.entityType === "LESSON" && p.status === "COMPLETED" && activeLessonIds.has(p.entityId)
+    ).length;
+
+    const inProgressLessons = progressList.filter(
+      p => p.entityType === "LESSON" && p.status === "IN_PROGRESS" && activeLessonIds.has(p.entityId)
+    ).length;
+
+    // Calculate recent lessons list in-memory
+    const recentLessonsRaw = lessons.slice(0, 4);
+    const progressMap = new Map<string, string>();
+    progressList.forEach(p => {
+      if (p.entityType === "LESSON") {
+        progressMap.set(p.entityId, p.status);
       }
-    });
-
-    const inProgressLessons = await prisma.progress.count({
-      where: {
-        entityType: "LESSON",
-        status: "IN_PROGRESS",
-        entityId: {
-          in: (await prisma.lesson.findMany({ where: lessonFilter, select: { id: true } })).map(l => l.id)
-        }
-      }
-    });
-
-    const recentLessonsRaw = await prisma.lesson.findMany({
-      where: lessonFilter,
-      orderBy: { updatedAt: "desc" },
-      take: 4
-    });
-
-    const recentLessonIds = recentLessonsRaw.map(l => l.id);
-    const recentProgress = await prisma.progress.findMany({
-      where: {
-        entityType: "LESSON",
-        entityId: { in: recentLessonIds }
-      }
-    });
-    const recentProgressMap = new Map<string, string>();
-    recentProgress.forEach(p => {
-      recentProgressMap.set(p.entityId, p.status);
     });
 
     const recentLessons = recentLessonsRaw.map(l => ({
       ...l,
-      status: recentProgressMap.get(l.id) || "NOT_STARTED"
+      status: progressMap.get(l.id) || "NOT_STARTED"
     }));
 
-    const stages = await prisma.stage.findMany({
-      where: stageFilter,
-      orderBy: { order: "asc" }
-    });
+    // Precalculate stage progress to eliminate DB query iterations inside loops
+    const stageProgress = stages.map(stage => {
+      const stageLessons = lessons.filter(l => l.stageId === stage.id);
+      const sTotal = stageLessons.length;
+      
+      const lessonIds = new Set(stageLessons.map(l => l.id));
+      const sCompleted = progressList.filter(
+        p => p.entityType === "LESSON" && p.status === "COMPLETED" && lessonIds.has(p.entityId)
+      ).length;
 
-    const stageProgress = [];
-    for (const stage of stages) {
-      const stageLessons = await prisma.lesson.findMany({
-        where: { stageId: stage.id, ...lessonFilter },
-        select: { id: true }
-      });
-      const lessonIds = stageLessons.map(l => l.id);
+      const sInProgress = progressList.filter(
+        p => p.entityType === "LESSON" && p.status === "IN_PROGRESS" && lessonIds.has(p.entityId)
+      ).length;
 
-      const sTotal = lessonIds.length;
-      let sCompleted = 0;
-      let sInProgress = 0;
-
-      if (sTotal > 0) {
-        sCompleted = await prisma.progress.count({
-          where: {
-            entityType: "LESSON",
-            entityId: { in: lessonIds },
-            status: "COMPLETED"
-          }
-        });
-
-        sInProgress = await prisma.progress.count({
-          where: {
-            entityType: "LESSON",
-            entityId: { in: lessonIds },
-            status: "IN_PROGRESS"
-          }
-        });
-      }
-
-      // Check if Stage itself is marked complete by looking at the STAGE progress row
-      const stageProgressRow = await prisma.progress.findUnique({
-        where: {
-          entityType_entityId: {
-            entityType: "STAGE",
-            entityId: stage.id
-          }
-        }
-      });
+      const stageProgressRow = progressList.find(
+        p => p.entityType === "STAGE" && p.entityId === stage.id
+      );
 
       const percentage = sTotal > 0 ? Math.round((sCompleted / sTotal) * 100) : 0;
 
-      stageProgress.push({
+      return {
         stageId: stage.id,
         stageTitle: stage.title,
         totalLessons: sTotal,
@@ -112,8 +79,8 @@ export async function GET(req: Request) {
         inProgressLessons: sInProgress,
         percentage,
         stageStatus: stageProgressRow ? stageProgressRow.status : "NOT_STARTED"
-      });
-    }
+      };
+    });
 
     return NextResponse.json({
       totalStages,
@@ -124,6 +91,7 @@ export async function GET(req: Request) {
       stageProgress
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("Dashboard stats aggregation error:", err);
+    return NextResponse.json({ error: err.message || "Database request failed." }, { status: 500 });
   }
 }

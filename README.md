@@ -71,118 +71,82 @@ Truy cập ứng dụng tại địa chỉ: `http://localhost:3000`
 
 ---
 
-## 🚀 Hướng dẫn Deploy lên Vercel
+## 🚀 Hướng dẫn Deploy lên Vercel & Cấu hình Database Connection Pooling
 
-Ứng dụng được thiết lập chu đáo để dễ dàng triển khai lên dịch vụ đám mây Vercel.
+Ứng dụng này được xây dựng trên nền tảng **Next.js 15 App Router** hiện đại và **Prisma ORM**. Khi deploy lên môi trường Serverless như Vercel, các kết nối Database có thể bị scale đột ngột gây ra lỗi quá tải kết nối (`EMAXCONNSESSION: max clients reached`). Hãy tuân thủ hướng dẫn sau để cấu hình tối ưu.
 
-### Cách 1: Deploy Dự án Full-stack Node + React lên Vercel
-Do Vercel hỗ trợ tuyệt vời cho cấu trúc Serverless Functions, bạn có thể ánh xạ các Router API trong file `server.ts` sang các API Routes của Vercel (đặt trong thư mục `/api/*` của Vercel) hoặc cấu hình `vercel.json` để trỏ toàn bộ request `/api` sang tệp server chạy Node.js.
+### 1. Chuẩn bị Connection Pooling cho PostgreSQL
 
-#### File cấu hình `vercel.json` tham khảo:
-Hãy tạo tệp tin `vercel.json` ở thư mục gốc nếu muốn deploy Node server sang Vercel Serverless:
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "server.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "server.ts"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
-}
-```
+#### Nếu dùng Neon:
+1. Sử dụng chuỗi kết nối **Pooled Connection** (Thường có hậu tố `-pooler.postgres.neon.tech` hoặc cấu hình Neon pooling).
+2. Định nghĩa tham số cấu hình pooling trong chuỗi kết nối của bạn:
+   ```env
+   DATABASE_URL="postgresql://username:password@your-neon-pooler-domain.tech/neondb?sslmode=require&connection_limit=1"
+   ```
+   *Lưu ý:* Việc thêm `connection_limit=1` là tối quan trọng đối với các Serverless functions trên Vercel để giới hạn mỗi instance logic chỉ sử dụng duy nhất 1 kết nối.
 
-### Cách 2: Setup Next.js App Router (Nếu bạn muốn tự bọc code vào Next.js)
-Nếu sau này bạn lựa chọn chuyển sang framework Next.js như yêu cầu ban đầu:
-1. Bạn có thể tận dụng chính xác toàn bộ cấu trúc các trang JSX/TSX chúng tôi viết sẵn trong thư mục `/src/components/*` để chuyển thể thành cấu trúc các Page của Next.js (bằng cách di chuyển chúng vào `/app/` hoặc từng Route tương ứng).
-2. Tận dụng nguyên vẹn tệp `/prisma/schema.prisma` và mã nạp dữ liệu mẫu `/prisma/seed.ts`.
-3. Thay thế các lệnh gọi API `fetch(/api/...)` thành các Server Actions của Next.js hoặc viết API Routes tương đương trong `/app/api/.../route.ts` bằng các truy vấn trực tiếp Prisma Client:
-   ```typescript
-   // Ví dụ trong Next.js Route Handler
-   import { NextResponse } from 'next/server';
-   import { prisma } from '@/lib/prisma';
-
-   export async function GET() {
-     const stats = await prisma.lesson.findMany();
-     return NextResponse.json(stats);
-   }
+#### Nếu dùng Supabase:
+1. Không dùng cổng kết nối trực tiếp (5432). Thay vào đó, lấy chuỗi kết nối **Connection Pooler (Transaction Mode)**, thường dùng cổng `6543` và chế độ Transactions.
+2. Thêm các tham số pgbouncer phù hợp vào chuỗi kết nối:
+   ```env
+   DATABASE_URL="postgresql://postgres.your-ref-id:your-password@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
    ```
 
-### 🔐 Thiết lập Environment Variables trên Vercel:
-Trong trang quản trị bảng điều khiển dự án của Vercel, hãy truy cập **Settings -> Environment Variables** và định nghĩa các khóa bảo mật sau:
+### 2. Thiết lập Environment Variables trên Vercel
 
-* `DATABASE_URL`: Hãy dán chuỗi kết nối PostgreSQL thật của bạn (ví dụ từ Supabase hoặc Neon Postgres).
-* `NODE_ENV`: Đặt giá trị `"production"`.
-* `GEMINI_API_KEY` (Tùy chọn phụ sau này): Điền mã khóa bí mật Gemini của bạn nếu muốn mở rộng tính năng AI phân tích.
+Truy cập trang quản trị dự án trên Vercel: **Settings -> Environment Variables** và khai báo các khóa sau:
 
----
+| Tên biến | Giá trị khuyên dùng | Diễn giải |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | *Chuỗi kết nối Pooled của bạn* | Xem hướng dẫn cấu hình ở Mục 1 phía trên |
+| `NODE_ENV` | `production` | Chạy ứng dụng trong chế độ Production tối ưu |
 
-## 📐 Kiến trúc Danh mục Cơ sở Dữ liệu Prisma (Prisma Models)
+*Quan trọng:* Sau khi thay đổi hoặc bổ sung biến môi trường (Environment Variables) trong Vercel settings, bạn cần kích hoạt **Redeploy** lại phiên bản để Vercel nạp các giá trị cấu hình mới nhất vào RAM của Serverless.
+
+### 📐 Kiến trúc Mô hình Cơ sở Dữ liệu (Prisma Models)
+
+Hệ thống lưu trữ dữ liệu an toàn dựa trên schema sau:
 
 ```prisma
 // Stage / Giai đoạn học tập
 model Stage {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  goal        String
-  order       Int
-  lessons     Lesson[]
+  id             String          @id @default(uuid())
+  code           String          @unique
+  title          String
+  description    String
+  goal           String
+  order          Int             @unique
+  bigExercise    String          @default("")
+  expectedOutput String          @default("")
+  finalChecklist String          @default("")
+  status         PublishStatus   @default(PUBLISHED)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  lessons        Lesson[]
+  stagePractices StagePractice[]
 }
 
 // Lesson / Bài học cố định trong Lộ trình
 model Lesson {
-  id                     String         @id @default(uuid())
+  id                     String                @id @default(uuid())
+  code                   String                @unique
   stageId                String
-  stage                  Stage          @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stage                  Stage                 @relation(fields: [stageId], references: [id], onDelete: Cascade)
   title                  String
   order                  Int
   objective              String
   theory                 String
   example                String
-  exercise               String
+  smallExercise          String                @default("")
   realProjectApplication String
   expectedOutput         String
-  status                 LessonStatus   @default(NOT_STARTED)
-  personalNote           String         @default("")
-  checklistItems         ChecklistItem[]
-  practices              Practice[]
-}
-
-// Checklist Item / Tiêu chí tự review của từng bài
-model ChecklistItem {
-  id        String   @id @default(uuid())
-  lessonId  String
-  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  content   String
-  isChecked Boolean  @default(false)
-  order     Int
-}
-
-// Practice / Không gian bài làm thực phẩm của từng môn
-model Practice {
-  id          String   @id @default(uuid())
-  lessonId    String
-  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  projectName String   @default("")
-  content     String   @default("")
-  reflection  String   @default("")
+  status                 PublishStatus         @default(PUBLISHED)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  checklistItems         LessonChecklistItem[]
+  lessonPractices        LessonPractice[]
 }
 ```
 
-Hãy bắt đầu ngày học tập hôm nay bằng cách mở các tab bài học và ôn tập các kiến thức phân tích nghiệp vụ tuyệt vời nhất! 🚀📈
+Hãy bắt đầu rèn luyện hôm nay bằng cách mở các tab bài học và ôn tập các kiến thức phân tích nghiệp vụ thiết kế sẵn! 🚀📈
+
