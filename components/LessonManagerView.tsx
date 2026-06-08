@@ -24,23 +24,35 @@ export default function LessonManagerView({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStageFilter, setSelectedStageFilter] = useState("all");
 
-  const getStatusBadge = (status: LessonStatus) => {
+  const getStatusBadge = (status: any) => {
     switch (status) {
-      case LessonStatus.COMPLETED:
+      case "PUBLISHED":
         return (
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+            Xuất bản
+          </span>
+        );
+      case "DRAFT":
+        return (
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/50">
+            Bản nháp
+          </span>
+        );
+      case "COMPLETED":
+        return (
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-555/20">
             Hoàn thành
           </span>
         );
-      case LessonStatus.IN_PROGRESS:
+      case "IN_PROGRESS":
         return (
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 animate-pulse">
             Đang học
           </span>
         );
       default:
         return (
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/50">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-450 border border-slate-700/30">
             Chưa học
           </span>
         );

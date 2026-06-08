@@ -5,13 +5,43 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const stageId = searchParams.get("stageId");
+    const includeDrafts = searchParams.get("includeDrafts") === "true";
+
+    const whereClause: any = {};
+    if (stageId) {
+      whereClause.stageId = stageId;
+    }
+    if (!includeDrafts) {
+      whereClause.status = "PUBLISHED";
+    }
 
     const lessons = await prisma.lesson.findMany({
-      where: stageId ? { stageId } : {},
+      where: whereClause,
       orderBy: { order: "asc" }
     });
 
-    return NextResponse.json(lessons);
+    // Obtain the list of matching student progress stages/lessons entries
+    const progressList = await prisma.progress.findMany({
+      where: {
+        entityType: "LESSON",
+        entityId: { in: lessons.map(l => l.id) }
+      }
+    });
+
+    const progressMap = new Map<string, string>();
+    progressList.forEach(p => {
+      progressMap.set(p.entityId, p.status);
+    });
+
+    // Overwrite .status property dynamically to maintain backwards compatibility with client views
+    const mappedLessons = lessons.map(l => ({
+      ...l,
+      // Backup true publishStatus in secondary field
+      publishStatus: l.status,
+      status: progressMap.get(l.id) || "NOT_STARTED"
+    }));
+
+    return NextResponse.json(mappedLessons);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -21,35 +51,56 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const {
+      code,
       stageId,
       title,
       order,
       objective,
       theory,
       example,
-      exercise,
+      smallExercise,
       realProjectApplication,
       expectedOutput,
+      status,
       checklistText
     } = body;
 
     if (!stageId || !title) {
-      return NextResponse.json({ error: "stageId and title are required" }, { status: 400 });
+      return NextResponse.json({ error: "stageId và title là bắt buộc" }, { status: 400 });
+    }
+
+    const computedCode = code
+      ? code.trim().toUpperCase()
+      : "LESSON-" + Math.floor(100000 + Math.random() * 900000);
+
+    const dupCode = await prisma.lesson.findUnique({
+      where: { code: computedCode }
+    });
+    if (dupCode) {
+      return NextResponse.json({ error: "Mã bài học (code) đã tồn tại." }, { status: 400 });
+    }
+
+    // Checking composite unique constraint: stageId + title
+    const dupTitleInStage = await prisma.lesson.findFirst({
+      where: { stageId, title }
+    });
+    if (dupTitleInStage) {
+      return NextResponse.json({ error: "Tiêu đề bài học này đã tồn tại trong giai đoạn này." }, { status: 400 });
     }
 
     const lesson = await prisma.lesson.create({
       data: {
+        code: computedCode,
         stageId,
         title,
         order: Number(order) || 1,
         objective: objective || "",
         theory: theory || "",
         example: example || "",
-        exercise: exercise || "",
+        smallExercise: smallExercise || "",
         realProjectApplication: realProjectApplication || "",
         expectedOutput: expectedOutput || "",
-        status: "NOT_STARTED",
-        personalNote: ""
+        status: status === "DRAFT" ? "DRAFT" : "PUBLISHED"
       }
     });
 
@@ -60,11 +111,10 @@ export async function POST(req: Request) {
         .filter((l: string) => l.length > 0);
 
       for (let i = 0; i < items.length; i++) {
-        await prisma.checklistItem.create({
+        await prisma.lessonChecklistItem.create({
           data: {
             lessonId: lesson.id,
             content: items[i],
-            isChecked: false,
             order: i + 1
           }
         });

@@ -3,6 +3,17 @@
  * Domain Types Definition
  */
 
+export enum PublishStatus {
+  DRAFT = "DRAFT",
+  PUBLISHED = "PUBLISHED"
+}
+
+export enum ProgressStatus {
+  NOT_STARTED = "NOT_STARTED",
+  IN_PROGRESS = "IN_PROGRESS",
+  COMPLETED = "COMPLETED"
+}
+
 export enum LessonStatus {
   NOT_STARTED = "NOT_STARTED",
   IN_PROGRESS = "IN_PROGRESS",
@@ -11,27 +22,33 @@ export enum LessonStatus {
 
 export interface Stage {
   id: string;
+  code: string;
   title: string;
   description: string;
   goal: string;
   order: number;
+  bigExercise: string;
+  expectedOutput: string;
+  finalChecklist: string;
+  status: PublishStatus;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Lesson {
   id: string;
+  code: string;
   stageId: string;
   title: string;
   order: number;
   objective: string;
   theory: string;
   example: string;
-  exercise: string;
+  smallExercise: string;
+  exercise?: string; // backwards compatibility alias for smaller layouts
   realProjectApplication: string;
   expectedOutput: string;
-  status: LessonStatus;
-  personalNote: string;
+  status: PublishStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,7 +65,8 @@ export interface ChecklistItem {
 
 export interface Practice {
   id: string;
-  lessonId: string;
+  lessonId?: string;
+  stageId?: string;
   projectName: string;
   content: string;
   reflection: string;

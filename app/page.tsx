@@ -8,27 +8,39 @@ import StageDetailView from "../components/StageDetailView";
 import LessonDetailView from "../components/LessonDetailView";
 import LessonFormView from "../components/LessonFormView";
 import LessonManagerView from "../components/LessonManagerView";
+import StageManagerView from "../components/StageManagerView";
+import StageFormView from "../components/StageFormView";
+import ImportExcelView from "../components/ImportExcelView";
 
 import { AppAPI } from "../lib/api";
 import { Stage, Lesson } from "../lib/types";
-import { Sparkles, AlertCircle } from "lucide-react";
+import { Sparkles, AlertCircle, ShieldAlert, Key, Lock, CheckCircle2, UserCheck, ShieldClose } from "lucide-react";
 
 export default function App() {
-  // Navigation Routing States
-  const [currentView, setCurrentView] = useState<string>("dashboard"); // 'dashboard' | 'stages' | 'stage-detail' | 'lesson-detail' | 'lessons-manager' | 'add-lesson' | 'edit-lesson'
+  // 1. Core Profile & Security States
+  const [role, setRole] = useState<"user" | "admin">("user");
+  const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<boolean>(false);
+
+  // 2. Navigation Routing States
+  // 'dashboard' | 'stages' | 'stage-detail' | 'lesson-detail' | 'stages-manager' | 'add-stage' | 'edit-stage' | 'lessons-manager' | 'add-lesson' | 'edit-lesson' | 'import-excel'
+  const [currentView, setCurrentView] = useState<string>("dashboard");
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [editLessonId, setEditLessonId] = useState<string | null>(null);
+  const [editStageId, setEditStageId] = useState<string | null>(null);
   const [preSelectedStageId, setPreSelectedStageId] = useState<string | null>(null);
 
-  // Core Data States
+  // 3. Core Data States
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [stages, setStages] = useState<Stage[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [stats, setStats] = useState<any>(null);
 
-  // Dictionary for quick stage title mapping
+  // Dictionary lookup for quick stage title maps
   const [stagesMap, setStagesMap] = useState<Record<string, string>>({});
 
   // Sync background data
@@ -36,11 +48,12 @@ export default function App() {
     try {
       setLoading(true);
       setError(null);
+      const includeDrafts = role === "admin";
       
       const [stagesData, lessonsData, statsData] = await Promise.all([
-        AppAPI.getStages(),
-        AppAPI.getLessons(),
-        AppAPI.getDashboardStats()
+        AppAPI.getStages(includeDrafts),
+        AppAPI.getLessons(undefined, includeDrafts),
+        AppAPI.getDashboardStats(includeDrafts)
       ]);
 
       setStages(stagesData);
@@ -55,40 +68,114 @@ export default function App() {
       setStagesMap(mapping);
     } catch (err: any) {
       console.error("Failed to load BA OS state data", err);
-      setError(err?.message || "Không thể đồng bộ dữ liệu học tập. Hãy kiểm tra kết nối Server.");
+      setError(err?.message || "Không thể đồng bộ dữ liệu học tập. Hãy kiểm tra kết nối cơ sở dữ liệu.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Reload data whenever active role changes to enable/disable drafts view
   useEffect(() => {
     loadAppData();
-  }, []);
+  }, [role]);
 
-  // Quick refresh statistic without trigger screen spinner loader
+  // Quick refresh stats without triggering spinner loaders
   const refreshStatsOnly = async () => {
     try {
-      const statsData = await AppAPI.getDashboardStats();
+      const includeDrafts = role === "admin";
+      const statsData = await AppAPI.getDashboardStats(includeDrafts);
       setStats(statsData);
-      // reload lessons to stay synced
-      const lessonsData = await AppAPI.getLessons();
+      const lessonsData = await AppAPI.getLessons(undefined, includeDrafts);
       setLessons(lessonsData);
     } catch (e) {
       console.warn("Failed to background refresh stats", e);
     }
   };
 
-  // Delete Action handling with custom Browser Confirmation
+  // 4. Role credentials verification handler
+  const handleRoleToggleRequest = () => {
+    if (role === "admin") {
+      // Direct switch on downgrade to secure user view
+      setRole("user");
+      setCurrentView("dashboard");
+      setActiveStageId(null);
+      setActiveLessonId(null);
+    } else {
+      // Trigger prompt credentials modal on upgrade to admin
+      setAdminPasswordInput("");
+      setPasswordError(null);
+      setPasswordSuccess(false);
+      setShowPasswordModal(true);
+    }
+  };
+
+  const verifyAdminCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    try {
+      const response = await fetch("/api/admin/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPasswordInput })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPasswordSuccess(true);
+        setTimeout(() => {
+          setRole("admin");
+          setShowPasswordModal(false);
+          setPasswordSuccess(false);
+          setCurrentView("stages-manager"); // Push to admin manager after success!
+        }, 800);
+      } else {
+        setPasswordError("Mật khẩu Quản trị viên không chính xác. Hãy thử lại!");
+      }
+    } catch (err) {
+      setPasswordError("Không thể kết nối đến máy chủ xác thực.");
+    }
+  };
+
+  // 5. Stage CRUD actions
+  const handleSaveStage = async (id: string | null, payload: any) => {
+    try {
+      if (id) {
+        await AppAPI.updateStage(id, payload);
+      } else {
+        await AppAPI.createStage(payload);
+      }
+      await loadAppData();
+      setCurrentView("stages-manager");
+      setEditStageId(null);
+    } catch (e: any) {
+      alert("Lưu thông tin Giai đoạn thất bại: " + (e?.message || "Unknown db issue"));
+    }
+  };
+
+  const handleDeleteStage = async (stageId: string) => {
+    const confirmation = window.confirm("CẢNH BÁO: Xóa giai đoạn này sẽ xóa toàn bộ các bài học, bài tập liên đới thuộc giai đoạn. Bạn có chắc chắn?");
+    if (!confirmation) return;
+
+    try {
+      await AppAPI.deleteStage(stageId);
+      await loadAppData();
+      if (activeStageId === stageId) {
+        setActiveStageId(null);
+        setCurrentView("stages-manager");
+      }
+    } catch (e: any) {
+      alert("Xóa giai đoạn thất bại: " + (e?.message || "Unknown error"));
+    }
+  };
+
+  // 6. Lesson CRUD actions
   const handleDeleteLesson = async (lessonId: string) => {
-    const confirmation = window.confirm("Bạn có chắc chắn muốn xóa bài học này khỏi lộ trình tự học?");
+    const confirmation = window.confirm("Bạn có chắc chắn muốn xóa bài học này khỏi lộ trình?");
     if (!confirmation) return;
 
     try {
       await AppAPI.deleteLesson(lessonId);
-      // Reload UI
       await loadAppData();
 
-      // If we are currently studying the deleted lesson, go back
       if (activeLessonId === lessonId) {
         setCurrentView("stages");
         setActiveLessonId(null);
@@ -98,23 +185,16 @@ export default function App() {
     }
   };
 
-  // Creation & Modification submission
   const handleSaveLesson = async (id: string | null, payload: any) => {
     try {
       if (id) {
-        // Edit Mode
         await AppAPI.updateLesson(id, payload);
       } else {
-        // Create Mode
         await AppAPI.createLesson(payload);
       }
-
-      // Reload global status
       await loadAppData();
 
-      // Navigate back
       if (activeStageId) {
-        // If we created/edited from a Stage, return there
         setCurrentView("stage-detail");
       } else {
         setCurrentView("lessons-manager");
@@ -127,7 +207,7 @@ export default function App() {
     }
   };
 
-  // Deep routing actions
+  // 7. Navigation deep handlers
   const navigateToStageDetail = async (stageId: string) => {
     setActiveStageId(stageId);
     setCurrentView("stage-detail");
@@ -135,7 +215,6 @@ export default function App() {
 
   const navigateToLessonDetail = async (lessonId: string) => {
     setActiveLessonId(lessonId);
-    // Find parent stage Id to display breadcrumb
     const target = lessons.find(l => l.id === lessonId);
     if (target) {
       setActiveStageId(target.stageId);
@@ -143,22 +222,20 @@ export default function App() {
     setCurrentView("lesson-detail");
   };
 
-  const navigateToEditForm = (lessonId: string) => {
+  const navigateToEditLessonForm = (lessonId: string) => {
     setEditLessonId(lessonId);
     setCurrentView("edit-lesson");
   };
 
-  const navigateToAddFormFromStage = (stageId: string) => {
+  const navigateToAddLessonFormFromStage = (stageId: string) => {
     setPreSelectedStageId(stageId);
     setEditLessonId(null);
     setCurrentView("add-lesson");
   };
 
-  // Safe status indicators
   const totalCount = stats?.totalLessons || 0;
   const completedCount = stats?.completedLessons || 0;
 
-  // Active Stage object fetcher
   const getActiveStageDetails = () => {
     if (!activeStageId) return null;
     const sObj = stages.find(s => s.id === activeStageId);
@@ -176,8 +253,8 @@ export default function App() {
       return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3 text-slate-400" id="global-spinner">
           <Sparkles className="w-12 h-12 animate-spin text-emerald-500" />
-          <h3 className="text-base font-bold text-slate-100">Đang khởi tạo hệ thống BA Learning OS...</h3>
-          <p className="text-xs text-slate-500">Loading your Business Analysis roadmap</p>
+          <h3 className="text-sm font-bold text-slate-100">Đang khởi tạo BA Learning OS...</h3>
+          <p className="text-xs text-slate-550">Sắp xếp hệ thống dữ liệu học liệu</p>
         </div>
       );
     }
@@ -185,18 +262,40 @@ export default function App() {
     if (error) {
       return (
         <div className="max-w-md mx-auto my-12 bg-slate-900 border border-slate-800 p-6 rounded-xl text-center space-y-4" id="global-error-card">
-          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
-          <h3 className="text-base font-bold text-slate-200">Không thể kết nối Cơ sở dữ liệu</h3>
-          <p className="text-xs text-rose-450 font-medium leading-relaxed">{error}</p>
+          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
+          <h3 className="text-base font-bold text-slate-200">Không thể đồng bộ cơ sở dữ liệu</h3>
+          <p className="text-xs text-rose-300 font-medium leading-relaxed">{error}</p>
           <button
             onClick={loadAppData}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
           >
-            Thử tải lại dữ liệu
+            Tải lại dữ liệu hệ thống
           </button>
         </div>
       );
     }
+
+    // Protection gates for admin views
+    const requireAdmin = (view: string, content: React.ReactNode) => {
+      if (role !== "admin") {
+        return (
+          <div className="max-w-md mx-auto my-12 bg-slate-900 border border-amber-500/30 p-8 rounded-xl text-center space-y-4" id="admin-required-gate">
+            <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto animate-bounce" />
+            <h3 className="text-base font-bold text-slate-200">Khu vực hạn chế truy cập</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Bạn đang cố truy cập chế độ quản lý <strong>{view}</strong>. Hãy chuyển đổi vai trò sang Admin ở thanh Sidebar để tiếp tục.
+            </p>
+            <button
+              onClick={handleRoleToggleRequest}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-extrabold transition shadow-sm cursor-pointer"
+            >
+              Nhập mã Quản trị viên
+            </button>
+          </div>
+        );
+      }
+      return content;
+    };
 
     switch (currentView) {
       case "dashboard":
@@ -224,16 +323,24 @@ export default function App() {
         return (
           <StageDetailView
             stage={stDetail}
-            onBack={() => setCurrentView("stages")}
+            onBack={() => {
+              if (role === "admin") {
+                setCurrentView("stages-manager");
+              } else {
+                setCurrentView("stages");
+              }
+            }}
             onSelectLesson={navigateToLessonDetail}
-            onAddLessonToStage={navigateToAddFormFromStage}
-            onEditLesson={navigateToEditForm}
+            onAddLessonToStage={navigateToAddLessonFormFromStage}
+            onEditLesson={navigateToEditLessonForm}
             onDeleteLesson={handleDeleteLesson}
+            role={role}
+            onSaveStagePractice={AppAPI.saveStagePractice}
           />
         );
 
       case "lesson-detail":
-        if (!activeLessonId) return <div className="text-center text-xs text-slate-400">Chưa chọn bài học.</div>;
+        if (!activeLessonId) return <div className="text-center text-xs text-slate-400">Chưa chọn bài học để nghiên cứu.</div>;
         return (
           <LessonDetailView
             lessonId={activeLessonId}
@@ -244,7 +351,6 @@ export default function App() {
               } else {
                 setCurrentView("stages");
               }
-              // Background update metrics when exiting lesson workspace
               await refreshStatsOnly();
             }}
             getLessonDetails={AppAPI.getLessonDetails}
@@ -256,14 +362,52 @@ export default function App() {
           />
         );
 
+      // --- Admin Exclusive Views ---
+
+      case "stages-manager":
+        return requireAdmin(
+          "Quản lý Giai đoạn",
+          <StageManagerView
+            stages={stages}
+            onSelectStage={navigateToStageDetail}
+            onEditStage={(id) => {
+              setEditStageId(id);
+              setCurrentView("edit-stage");
+            }}
+            onDeleteStage={handleDeleteStage}
+            onAddStage={() => {
+              setEditStageId(null);
+              setCurrentView("add-stage");
+            }}
+          />
+        );
+
+      case "add-stage":
+      case "edit-stage":
+        return requireAdmin(
+          "Soạn thảo Giai đoạn",
+          <StageFormView
+            editStageId={editStageId}
+            getStageDetails={async (id) => {
+              return stages.find(s => s.id === id)!;
+            }}
+            onSaveStage={handleSaveStage}
+            onCancel={() => {
+              setCurrentView("stages-manager");
+              setEditStageId(null);
+            }}
+          />
+        );
+
       case "lessons-manager":
-        return (
+        return requireAdmin(
+          "Quản lý Bài học",
           <LessonManagerView
             lessons={lessons}
             stages={stages}
             stagesMap={stagesMap}
             onSelectLesson={navigateToLessonDetail}
-            onEditLesson={navigateToEditForm}
+            onEditLesson={navigateToEditLessonForm}
             onDeleteLesson={handleDeleteLesson}
             onAddLesson={() => {
               setEditLessonId(null);
@@ -275,7 +419,8 @@ export default function App() {
 
       case "add-lesson":
       case "edit-lesson":
-        return (
+        return requireAdmin(
+          "Soạn thảo Bài học",
           <LessonFormView
             stages={stages}
             editLessonId={editLessonId}
@@ -284,7 +429,6 @@ export default function App() {
             onSaveLesson={handleSaveLesson}
             onCancel={() => {
               if (editLessonId) {
-                // If editing, try to return to previous relevant portal
                 if (activeStageId) {
                   setCurrentView("stage-detail");
                 } else {
@@ -301,19 +445,31 @@ export default function App() {
           />
         );
 
+      case "import-excel":
+        return requireAdmin(
+          "Nhập file Excel",
+          <ImportExcelView
+            onImportSuccess={async () => {
+              await loadAppData();
+            }}
+            onCancel={() => {
+              setCurrentView("stages");
+            }}
+          />
+        );
+
       default:
-        return <div className="text-slate-400 text-xs">Màn hình đang phát triển.</div>;
+        return <div className="text-slate-400 text-xs">Màn hình đang thiết kế thêm.</div>;
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-950 font-sans text-slate-300 antialiased" id="main-layout-root">
+    <div className="flex min-h-screen bg-slate-950 font-sans text-slate-350 antialiased" id="main-layout-root">
       {/* Sidebar navigation panel */}
       <Sidebar
         currentView={currentView}
         onNavigate={(view) => {
           setCurrentView(view);
-          // Clean active ids when returning to root menus
           if (view !== "stage-detail" && view !== "lesson-detail") {
             setActiveStageId(null);
             setActiveLessonId(null);
@@ -321,12 +477,84 @@ export default function App() {
         }}
         completedCount={completedCount}
         totalCount={totalCount}
+        role={role}
+        onChangeRole={handleRoleToggleRequest}
       />
 
       {/* Main viewport area */}
       <main className="flex-1 overflow-y-auto h-screen p-6 md:p-8" id="viewport-main">
         {renderMainViewContent()}
       </main>
+
+      {/* Floating security credentials check modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 font-sans" id="security-credential-modal">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl relative animate-fadeIn">
+            <div className="flex items-center space-x-3.5 mb-5">
+              <div className="p-2.5 bg-amber-500/10 text-amber-500 rounded-xl">
+                <Lock className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-100">Xác thực quyền Quản trị viên</h3>
+                <p className="text-[11px] text-slate-500 font-medium">Bảo mật hệ thống BA Learning OS</p>
+              </div>
+            </div>
+
+            {passwordSuccess ? (
+              <div className="py-6 text-center space-y-2 flex flex-col items-center">
+                <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-full">
+                  <UserCheck className="w-8 h-8" />
+                </div>
+                <h4 className="text-xs font-black text-emerald-400">Đăng nhập Admin thành công</h4>
+                <p className="text-[10px] text-slate-500 font-medium">Đang chuyển tiếp về bảng điều hành...</p>
+              </div>
+            ) : (
+              <form onSubmit={verifyAdminCredentials} className="space-y-4">
+                {passwordError && (
+                  <div className="p-3 bg-rose-955 border border-rose-900/60 rounded-xl text-[11px] font-semibold text-rose-300 flex items-start space-x-1.5 leading-normal">
+                    <ShieldClose className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Mật khẩu admin:</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                      <Key className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="password"
+                      value={adminPasswordInput}
+                      onChange={(e) => setAdminPasswordInput(e.target.value)}
+                      placeholder="Nhập mã bảo vệ..."
+                      className="w-full text-xs text-slate-100 bg-slate-950 border border-slate-800 p-2.5 pl-9 rounded-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 font-bold block"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordModal(false)}
+                    className="flex-1 py-1.5 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-extrabold transition cursor-pointer"
+                  >
+                    Xác minh
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

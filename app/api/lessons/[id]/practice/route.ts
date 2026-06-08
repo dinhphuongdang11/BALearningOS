@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const practice = await prisma.practice.findFirst({
+    const practice = await prisma.lessonPractice.findFirst({
       where: { lessonId: id }
     });
     return NextResponse.json(practice || null);
@@ -25,7 +25,7 @@ export async function POST(
     const body = await req.json();
     const { projectName, content, reflection } = body;
 
-    const existingPractice = await prisma.practice.findFirst({
+    const existingPractice = await prisma.lessonPractice.findFirst({
       where: { lessonId: id }
     });
 
@@ -37,14 +37,14 @@ export async function POST(
 
     let result;
     if (!existingPractice) {
-      result = await prisma.practice.create({
+      result = await prisma.lessonPractice.create({
         data: {
           lessonId: id,
           ...data
         }
       });
     } else {
-      result = await prisma.practice.update({
+      result = await prisma.lessonPractice.update({
         where: { id: existingPractice.id },
         data
       });

@@ -7,20 +7,31 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const current = await prisma.checklistItem.findUnique({
+    const currentItem = await prisma.lessonChecklistItem.findUnique({
       where: { id }
     });
 
-    if (!current) {
-      return NextResponse.json({ error: "Checklist item not found" }, { status: 404 });
+    if (!currentItem) {
+      return NextResponse.json({ error: "Checklist item không tồn tại trong học liệu." }, { status: 404 });
     }
 
-    const updated = await prisma.checklistItem.update({
-      where: { id },
-      data: { isChecked: !current.isChecked }
+    const progress = await prisma.checklistProgress.findUnique({
+      where: { checklistItemId: id }
     });
 
-    return NextResponse.json(updated);
+    const nextChecked = progress ? !progress.isChecked : true;
+
+    const updatedProgress = await prisma.checklistProgress.upsert({
+      where: { checklistItemId: id },
+      update: { isChecked: nextChecked, updatedAt: new Date() },
+      create: { checklistItemId: id, isChecked: nextChecked }
+    });
+
+    // Return merged item structure so that UI receives a standard format
+    return NextResponse.json({
+      ...currentItem,
+      isChecked: updatedProgress.isChecked
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

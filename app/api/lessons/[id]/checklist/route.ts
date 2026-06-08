@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const list = await prisma.checklistItem.findMany({
+    const list = await prisma.lessonChecklistItem.findMany({
       where: { lessonId: id },
       orderBy: { order: "asc" }
     });
@@ -30,15 +30,14 @@ export async function POST(
       return NextResponse.json({ error: "Checklist item content is required" }, { status: 400 });
     }
 
-    const count = await prisma.checklistItem.count({
+    const count = await prisma.lessonChecklistItem.count({
       where: { lessonId: id }
     });
 
-    const item = await prisma.checklistItem.create({
+    const item = await prisma.lessonChecklistItem.create({
       data: {
         lessonId: id,
         content,
-        isChecked: false,
         order: count + 1
       }
     });

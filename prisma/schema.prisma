@@ -10,57 +10,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum LessonStatus {
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ProgressStatus {
   NOT_STARTED
   IN_PROGRESS
   COMPLETED
 }
 
 model Stage {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  goal        String
-  order       Int      @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lessons     Lesson[]
+  id             String          @id @default(uuid())
+  code           String          @unique
+  title          String
+  description    String
+  goal           String
+  order          Int             @unique
+  bigExercise    String          @default("")
+  expectedOutput String          @default("")
+  finalChecklist String          @default("")
+  status         PublishStatus   @default(PUBLISHED)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  lessons        Lesson[]
+  stagePractices StagePractice[]
 }
 
 model Lesson {
-  id                     String         @id @default(uuid())
+  id                     String                @id @default(uuid())
+  code                   String                @unique
   stageId                String
-  stage                  Stage          @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stage                  Stage                 @relation(fields: [stageId], references: [id], onDelete: Cascade)
   title                  String
   order                  Int
   objective              String
   theory                 String
   example                String
-  exercise               String
+  smallExercise          String                @default("")
   realProjectApplication String
   expectedOutput         String
-  status                 LessonStatus   @default(NOT_STARTED)
-  personalNote           String         @default("")
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
-  checklistItems         ChecklistItem[]
-  practices              Practice[]
+  status                 PublishStatus         @default(PUBLISHED)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  checklistItems         LessonChecklistItem[]
+  lessonPractices        LessonPractice[]
 
   @@unique([stageId, title])
 }
 
-model ChecklistItem {
+model LessonChecklistItem {
   id        String   @id @default(uuid())
   lessonId  String
   lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   content   String
-  isChecked Boolean  @default(false)
   order     Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Practice {
+model LessonPractice {
   id          String   @id @default(uuid())
   lessonId    String
   lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
@@ -69,4 +79,34 @@ model Practice {
   reflection  String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model StagePractice {
+  id          String   @id @default(uuid())
+  stageId     String
+  stage       Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  projectName String   @default("")
+  content     String   @default("")
+  reflection  String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Progress {
+  id         String         @id @default(uuid())
+  entityType String         // "STAGE" hoặc "LESSON"
+  entityId   String
+  status     ProgressStatus @default(NOT_STARTED)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([entityType, entityId])
+}
+
+model ChecklistProgress {
+  id              String   @id @default(uuid())
+  checklistItemId String   @unique // linked to LessonChecklistItem id
+  isChecked       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

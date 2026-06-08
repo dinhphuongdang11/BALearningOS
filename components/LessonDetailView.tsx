@@ -30,7 +30,7 @@ export default function LessonDetailView({
   const [activeTab, setActiveTab] = useState<"theory" | "workspace">("theory");
   const [toastMsg, setToastMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [lesson, setLesson] = useState<any | null>(null);
   const [checklists, setChecklists] = useState<ChecklistItem[]>([]);
   const [practice, setPractice] = useState<Practice | null>(null);
 
@@ -60,7 +60,12 @@ export default function LessonDetailView({
         setPracticeContent("");
         setReflection("");
       }
-      setPersonalNote(data.personalNote || "");
+      // Attempt to load note from localStorage, backup to database field
+      let savedNote = "";
+      if (typeof window !== "undefined") {
+        savedNote = localStorage.getItem(`lesson-note-${data.id}`) || "";
+      }
+      setPersonalNote(savedNote || (data as any).personalNote || "");
     } catch (err: any) {
       setError(err?.message || "Không thể tải cấu trúc bài học này.");
     } finally {
@@ -98,6 +103,9 @@ export default function LessonDetailView({
       setPractice(savedPractice);
 
       await onUpdatePersonalNote(lesson.id, personalNote);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`lesson-note-${lesson.id}`, personalNote);
+      }
       setLesson({ ...lesson, personalNote });
 
       triggerToast("Đã lưu giữ kết quả bài làm và ghi chú thành công!");
