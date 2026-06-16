@@ -16,11 +16,37 @@ export default function ImportExcelView({ onImportSuccess, onCancel }: ImportExc
   const [previewResult, setPreviewResult] = useState<any | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   
   // Tabs for preview
   const [activePreviewTab, setActivePreviewTab] = useState<"stages" | "lessons" | "checklists">("stages");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadTemplate = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Avoid triggering open file dialogue if inside/near drop areas
+    setDownloadingTemplate(true);
+    try {
+      const response = await fetch("/api/admin/import/template");
+      if (!response.ok) {
+        throw new Error("Không thể kết nối đến máy chủ để tải file.");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ba-learning-os-template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert("Lỗi khi tải file mẫu: " + err.message);
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -114,6 +140,31 @@ export default function ImportExcelView({ onImportSuccess, onCancel }: ImportExc
           Đồng bộ nhanh hàng chục bài học, danh sách checkpoint và mô tả giai đoạn chỉ từ 1 tập tin duy nhất.
         </p>
       </div>
+
+      {/* Guide Banner with Template Download */}
+      {!successMsg && !previewResult && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-6" id="template-guide-banner">
+          <div className="space-y-1.5">
+            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              Cách bước chuẩn bị tệp dữ liệu học tập
+            </h3>
+            <ul className="text-xs text-slate-400 list-decimal pl-5 space-y-1 mt-1 leading-relaxed">
+              <li>Tải về tệp mẫu Excel được định dạng sẵn cấu trúc bảng.</li>
+              <li>Điền danh mục các giai đoạn (Stages), các bài học tương ứng (Lessons) và danh sách tiêu chí kiểm tra (Lesson_Checklists).</li>
+              <li>Kéo tệp tin đã chuẩn bị vào vùng tải và nhấn xác nhận để hệ thống lưu trữ hàng loạt.</li>
+            </ul>
+          </div>
+          <button
+            onClick={handleDownloadTemplate}
+            disabled={downloadingTemplate}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 font-extrabold text-xs rounded-lg border border-emerald-500/25 transition disabled:opacity-50 shrink-0 cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>{downloadingTemplate ? "Đang tải tệp mẫu..." : "Tải File Excel Mẫu"}</span>
+          </button>
+        </div>
+      )}
 
       {/* Success banner */}
       {successMsg && (
