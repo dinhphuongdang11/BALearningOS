@@ -12,8 +12,14 @@ import StageManagerView from "../components/StageManagerView";
 import StageFormView from "../components/StageFormView";
 import ImportExcelView from "../components/ImportExcelView";
 
+// Multi-course Views
+import CoursesView from "../components/CoursesView";
+import CourseDetailView from "../components/CourseDetailView";
+import CourseManagerView from "../components/CourseManagerView";
+import CourseFormView from "../components/CourseFormView";
+
 import { AppAPI } from "../lib/api";
-import { Stage, Lesson } from "../lib/types";
+import { Stage, Lesson, Course } from "../lib/types";
 import { Sparkles, AlertCircle, ShieldAlert, Key, Lock, CheckCircle2, UserCheck, ShieldClose } from "lucide-react";
 
 export default function App() {
@@ -25,17 +31,21 @@ export default function App() {
   const [passwordSuccess, setPasswordSuccess] = useState<boolean>(false);
 
   // 2. Navigation Routing States
-  // 'dashboard' | 'stages' | 'stage-detail' | 'lesson-detail' | 'stages-manager' | 'add-stage' | 'edit-stage' | 'lessons-manager' | 'add-lesson' | 'edit-lesson' | 'import-excel'
-  const [currentView, setCurrentView] = useState<string>("dashboard");
+  const [currentView, setCurrentView] = useState<string>("courses"); // Default to Courses List for Student
+  const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
+  const [editCourseId, setEditCourseId] = useState<string | null>(null);
   const [editLessonId, setEditLessonId] = useState<string | null>(null);
   const [editStageId, setEditStageId] = useState<string | null>(null);
   const [preSelectedStageId, setPreSelectedStageId] = useState<string | null>(null);
+  const [selectedStageCourseId, setSelectedStageCourseId] = useState<string | null>(null);
+  const [selectedLessonCourseId, setSelectedLessonCourseId] = useState<string | null>(null);
 
   // 3. Core Data States
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -50,12 +60,14 @@ export default function App() {
       setError(null);
       const includeDrafts = role === "admin";
       
-      const [stagesData, lessonsData, statsData] = await Promise.all([
+      const [coursesData, stagesData, lessonsData, statsData] = await Promise.all([
+        AppAPI.getCourses(includeDrafts),
         AppAPI.getStages(includeDrafts),
         AppAPI.getLessons(undefined, includeDrafts),
         AppAPI.getDashboardStats(includeDrafts)
       ]);
 
+      setCourses(coursesData);
       setStages(stagesData);
       setLessons(lessonsData);
       setStats(statsData);
@@ -260,17 +272,75 @@ export default function App() {
     }
 
     if (error) {
+      const isSupabasePaused = error.includes("postgres.nerhvexxrbgyhlnfhcax") || error.includes("tenant/user") || error.includes("ENOTFOUND");
+      const isMaxConnections = error.includes("EMAXCONNSESSION") || error.includes("max clients reached") || error.includes("pool_size");
+
       return (
-        <div className="max-w-md mx-auto my-12 bg-slate-900 border border-slate-800 p-6 rounded-xl text-center space-y-4" id="global-error-card">
-          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
-          <h3 className="text-base font-bold text-slate-200">Không thể đồng bộ cơ sở dữ liệu</h3>
-          <p className="text-xs text-rose-300 font-medium leading-relaxed">{error}</p>
-          <button
-            onClick={loadAppData}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
-          >
-            Tải lại dữ liệu hệ thống
-          </button>
+        <div className="max-w-xl mx-auto my-12 bg-slate-900 border border-slate-800 p-8 rounded-xl space-y-6 text-slate-200" id="global-error-card">
+          <div className="text-center space-y-2">
+            <AlertCircle className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
+            <h3 className="text-lg font-bold text-slate-100">Không thể kết nối đến cơ sở dữ liệu</h3>
+            <p className="text-xs text-rose-300 font-medium leading-relaxed max-w-md mx-auto bg-rose-950/20 border border-rose-500/10 p-3 rounded-lg mt-2">
+              {error}
+            </p>
+          </div>
+
+          {/* Diagnostic Box */}
+          <div className="bg-slate-950/60 rounded-lg p-5 border border-slate-800 space-y-3">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">💡 Gợi ý xử lý nhanh sự cố:</h4>
+            
+            {isSupabasePaused && (
+              <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <p className="text-amber-400 font-bold">⚠️ Dự án Supabase của bạn dường như đang bị Tạm ngưng (Paused)!</p>
+                <p>
+                  Mã dự án database của bạn là <code className="bg-slate-900 px-1.5 py-0.5 rounded text-rose-300">nerhvexxrbgyhlnfhcax</code>. 
+                  Sau một thời gian không phát sinh truy vấn ở gói Miễn phí (Free Tier), Supabase sẽ tự động tạm dừng dự án để tiết kiệm tài nguyên.
+                </p>
+                <div className="bg-slate-900/80 p-3 rounded border border-slate-800 mt-2 space-y-1">
+                  <p className="font-semibold text-emerald-400">Cách khắc phục:</p>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Đăng nhập tài khoản của bạn tại <a href="https://supabase.com" target="_blank" rel="noopener noreferrer" className="underline text-emerald-400 hover:text-emerald-300">Supabase.com</a>.</li>
+                    <li>Tìm dự án <strong className="text-emerald-400">nerhvexxrbgyhlnfhcax</strong> của bạn.</li>
+                    <li>Nhấn nút <strong className="text-amber-400">"Restore Project"</strong> (Khôi phục dự án). Chờ khoảng 1-2 phút để database khởi động lại hoàn toàn.</li>
+                    <li>Sau đó, quay lại trang này và nhấn nút <strong>"Tải lại dữ liệu hệ thống"</strong> bên dưới.</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {isMaxConnections && (
+              <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <p className="text-amber-400 font-bold">⚠️ Lỗi quá số lượng kết nối tối đa (Max clients reached)!</p>
+                <p>
+                  Ứng dụng chạy trên môi trường Vercel Serverless gọi trực tiếp vào database mà không dùng Connection Pooler, hoặc thiếu cấu hình giới hạn kết nối.
+                </p>
+                <div className="bg-slate-900/80 p-3 rounded border border-slate-800 mt-2 space-y-1">
+                  <p className="font-semibold text-emerald-400">Cách khắc phục:</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Hãy đảm bảo dùng chuỗi kết nối dạng **Pooled Connection String** (Thường là cổng <code className="text-emerald-300 bg-slate-900 px-1 py-0.5 rounded">6543</code> và có thêm tham số <code className="text-emerald-300 bg-slate-900 px-1 py-0.5 rounded">?pgbouncer=true</code> cho Supabase).</li>
+                    <li>Thêm tham số <code className="text-emerald-300 bg-slate-900 px-1 py-0.5 rounded">&connection_limit=1</code> ở cuối chuỗi kết nối để mỗi API Route không tạo quá 1 kết nối.</li>
+                    <li>Ví dụ: <code className="text-slate-400 break-all bg-slate-900 p-1 rounded">postgresql://postgres.xxx:pass@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1</code></li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {!isSupabasePaused && !isMaxConnections && (
+              <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <p>Hãy kiểm tra lại biến môi trường <code className="bg-slate-900 px-1 py-0.5 rounded text-emerald-300">DATABASE_URL</code> trong phần cấu hình của Vercel / Local Environment.</p>
+                <p>Nếu bạn sử dụng Supabase hoặc Neon, hãy chắc chắn rằng cơ sở dữ liệu của bạn không bị tạm dừng và thông tin xác thực (username/password) hoàn toàn chính xác.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={loadAppData}
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition shadow-md cursor-pointer inline-flex items-center gap-2"
+            >
+              Tải lại dữ liệu hệ thống
+            </button>
+          </div>
         </div>
       );
     }
@@ -298,6 +368,37 @@ export default function App() {
     };
 
     switch (currentView) {
+      case "courses":
+        return (
+          <CoursesView
+            courses={courses}
+            stages={stages}
+            lessons={lessons}
+            progressList={stats?.stageProgress || []}
+            onSelectCourse={(courseId) => {
+              setActiveCourseId(courseId);
+              setCurrentView("course-detail");
+            }}
+          />
+        );
+
+      case "course-detail":
+        const activeCourse = courses.find(c => c.id === activeCourseId);
+        if (!activeCourse) return <div className="text-center text-xs text-slate-400">Không tìm thấy khóa học này.</div>;
+        return (
+          <CourseDetailView
+            course={activeCourse}
+            stages={stages}
+            lessons={lessons}
+            progressList={stats?.stageProgress || []}
+            onBack={() => {
+              setCurrentView("courses");
+              setActiveCourseId(null);
+            }}
+            onSelectLesson={navigateToLessonDetail}
+          />
+        );
+
       case "dashboard":
         return (
           <DashboardView
@@ -326,6 +427,8 @@ export default function App() {
             onBack={() => {
               if (role === "admin") {
                 setCurrentView("stages-manager");
+              } else if (activeCourseId) {
+                setCurrentView("course-detail");
               } else {
                 setCurrentView("stages");
               }
@@ -346,10 +449,12 @@ export default function App() {
             lessonId={activeLessonId}
             stageTitle={stagesMap[activeStageId || ""] || "Lộ trình học BA"}
             onBack={async () => {
-              if (activeStageId) {
+              if (activeCourseId) {
+                setCurrentView("course-detail");
+              } else if (activeStageId) {
                 setCurrentView("stage-detail");
               } else {
-                setCurrentView("stages");
+                setCurrentView("courses");
               }
               await refreshStatsOnly();
             }}
@@ -364,11 +469,69 @@ export default function App() {
 
       // --- Admin Exclusive Views ---
 
+      case "courses-manager":
+        return requireAdmin(
+          "Quản lý Khóa học",
+          <CourseManagerView
+            courses={courses}
+            onAddCourse={() => {
+              setEditCourseId(null);
+              setCurrentView("add-course");
+            }}
+            onEditCourse={(id) => {
+              setEditCourseId(id);
+              setCurrentView("edit-course");
+            }}
+            onDeleteCourse={async (id) => {
+              const confirm = window.confirm("Bạn có chắc muốn xóa khóa học này cùng toàn bộ lộ trình giai đoạn và bài học liên quan?");
+              if (!confirm) return;
+              try {
+                await AppAPI.deleteCourse(id);
+                await loadAppData();
+              } catch (e: any) {
+                alert("Lỗi khi xóa khóa học: " + e.message);
+              }
+            }}
+            onManageStages={(courseId) => {
+              setSelectedStageCourseId(courseId);
+              setCurrentView("stages-manager");
+            }}
+          />
+        );
+
+      case "add-course":
+      case "edit-course":
+        return requireAdmin(
+          "Biên soạn Khóa học",
+          <CourseFormView
+            editCourseId={editCourseId}
+            getCourses={() => courses}
+            onSaveCourse={async (id, payload) => {
+              try {
+                if (id) {
+                  await AppAPI.updateCourse(id, payload);
+                } else {
+                  await AppAPI.createCourse(payload);
+                }
+                await loadAppData();
+                setCurrentView("courses-manager");
+              } catch (e: any) {
+                alert("Lỗi khi lưu khóa học: " + e.message);
+              }
+            }}
+            onCancel={() => {
+              setCurrentView("courses-manager");
+              setEditCourseId(null);
+            }}
+          />
+        );
+
       case "stages-manager":
         return requireAdmin(
           "Quản lý Giai đoạn",
           <StageManagerView
             stages={stages}
+            courses={courses}
             onSelectStage={navigateToStageDetail}
             onEditStage={(id) => {
               setEditStageId(id);
@@ -379,6 +542,8 @@ export default function App() {
               setEditStageId(null);
               setCurrentView("add-stage");
             }}
+            selectedCourseId={selectedStageCourseId}
+            onCourseChange={setSelectedStageCourseId}
           />
         );
 
@@ -388,6 +553,7 @@ export default function App() {
           "Soạn thảo Giai đoạn",
           <StageFormView
             editStageId={editStageId}
+            getCourses={() => courses}
             getStageDetails={async (id) => {
               return stages.find(s => s.id === id)!;
             }}
@@ -405,6 +571,7 @@ export default function App() {
           <LessonManagerView
             lessons={lessons}
             stages={stages}
+            courses={courses}
             stagesMap={stagesMap}
             onSelectLesson={navigateToLessonDetail}
             onEditLesson={navigateToEditLessonForm}

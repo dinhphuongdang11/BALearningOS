@@ -300,8 +300,19 @@ export default function LessonDetailView({
                 <FileText className="w-4.5 h-4.5 text-emerald-400" />
                 <span>Nội dung lý thuyết (Bite-sized Theory)</span>
               </h3>
-              <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                {lesson.theory || "Không có tài liệu lý thuyết."}
+              <div className="text-sm text-slate-300 leading-relaxed">
+                {lesson.htmlContent ? (
+                  <div 
+                    className="prose prose-invert max-w-none text-slate-300 parsed-html-content"
+                    dangerouslySetInnerHTML={{ 
+                      __html: lesson.htmlContent.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "") 
+                    }}
+                  />
+                ) : (
+                  <div className="whitespace-pre-wrap">
+                    {lesson.theory || "Không có tài liệu lý thuyết."}
+                  </div>
+                )}
               </div>
             </div>
 

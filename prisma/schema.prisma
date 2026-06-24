@@ -21,13 +21,30 @@ enum ProgressStatus {
   COMPLETED
 }
 
+model Course {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  thumbnail   String?
+  level       String
+  category    String
+  status      String        @default("PUBLISHED") // "DRAFT", "PUBLISHED", "ARCHIVED"
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  stages      Stage[]
+  exercises   Exercise[]
+}
+
 model Stage {
   id             String          @id @default(uuid())
-  code           String          @unique
+  code           String
+  courseId       String?
+  course         Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   title          String
   description    String
   goal           String
-  order          Int             @unique
+  order          Int
   bigExercise    String          @default("")
   expectedOutput String          @default("")
   finalChecklist String          @default("")
@@ -40,7 +57,7 @@ model Stage {
 
 model Lesson {
   id                     String                @id @default(uuid())
-  code                   String                @unique
+  code                   String
   stageId                String
   stage                  Stage                 @relation(fields: [stageId], references: [id], onDelete: Cascade)
   title                  String
@@ -51,11 +68,13 @@ model Lesson {
   smallExercise          String                @default("")
   realProjectApplication String
   expectedOutput         String
+  htmlContent            String                @default("")
   status                 PublishStatus         @default(PUBLISHED)
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
   checklistItems         LessonChecklistItem[]
   lessonPractices        LessonPractice[]
+  exercises              Exercise[]
 
   @@unique([stageId, title])
 }
@@ -92,13 +111,30 @@ model StagePractice {
   updatedAt   DateTime @updatedAt
 }
 
+model Exercise {
+  id          String   @id @default(uuid())
+  courseId    String?
+  course      Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonId    String?
+  lesson      Lesson?  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  instruction String   @default("")
+  type        String   // "lesson_exercise" hoặc "course_project"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model Progress {
-  id         String         @id @default(uuid())
-  entityType String         // "STAGE" hoặc "LESSON"
-  entityId   String
-  status     ProgressStatus @default(NOT_STARTED)
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id          String         @id @default(uuid())
+  entityType  String         // "STAGE" hoặc "LESSON" hoặc "COURSE"
+  entityId    String
+  status      ProgressStatus @default(NOT_STARTED)
+  userId      String?
+  courseId    String?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@unique([entityType, entityId])
 }

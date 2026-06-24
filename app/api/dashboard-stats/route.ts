@@ -1,16 +1,38 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
+import { ensureDefaultCourseAndMigrate } from "../../../lib/migration";
 
 export async function GET(req: Request) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { searchParams } = new URL(req.url);
     const includeDrafts = searchParams.get("includeDrafts") === "true";
+    let courseId = searchParams.get("courseId");
+
+    // If no courseId specified, default to the first course
+    if (!courseId) {
+      const firstCourse = await prisma.course.findFirst({
+        orderBy: { sortOrder: "asc" }
+      });
+      courseId = firstCourse?.id || null;
+    }
+
+    if (!courseId) {
+      return NextResponse.json({
+        totalStages: 0,
+        totalLessons: 0,
+        completedLessons: 0,
+        inProgressLessons: 0,
+        recentLessons: [],
+        stageProgress: []
+      });
+    }
 
     // Standard filter for learner dashboard vs admin view
-    const stageFilter = includeDrafts ? {} : { status: "PUBLISHED" as const };
-    const lessonFilter = includeDrafts ? {} : { status: "PUBLISHED" as const };
+    const stageFilter: any = includeDrafts ? { courseId } : { courseId, status: "PUBLISHED" as const };
+    const lessonFilter: any = includeDrafts ? { stage: { courseId } } : { stage: { courseId }, status: "PUBLISHED" as const };
 
-    // Fetch data in parallel to reduce latency, resolving potential N+1 query structures
+    // Fetch data in parallel to reduce latency
     const [stages, lessons, progressList] = await Promise.all([
       prisma.stage.findMany({
         where: stageFilter,
@@ -18,7 +40,8 @@ export async function GET(req: Request) {
       }),
       prisma.lesson.findMany({
         where: lessonFilter,
-        orderBy: { updatedAt: "desc" }
+        orderBy: { order: "asc" },
+        include: { stage: true }
       }),
       prisma.progress.findMany()
     ]);

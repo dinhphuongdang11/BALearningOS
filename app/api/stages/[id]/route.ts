@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
+import { ensureDefaultCourseAndMigrate } from "../../../../lib/migration";
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { id } = await params;
     const { searchParams } = new URL(req.url);
     const includeDrafts = searchParams.get("includeDrafts") === "true";
@@ -35,10 +37,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { id } = await params;
     const body = await req.json();
     const {
       code,
+      courseId,
       title,
       description,
       goal,
@@ -54,14 +58,19 @@ export async function PUT(
       return NextResponse.json({ error: "Giai đoạn không tồn tại" }, { status: 404 });
     }
 
+    const targetCourseId = courseId !== undefined ? courseId : currentStage.courseId;
+
     const data: any = {};
     if (code !== undefined) {
       const cleanCode = code.trim().toUpperCase();
-      if (cleanCode !== currentStage.code) {
-        // Ensure not duplicate
-        const dup = await prisma.stage.findUnique({ where: { code: cleanCode } });
-        if (dup) {
-          return NextResponse.json({ error: "Mã giai đoạn (code) đã được sử dụng." }, { status: 400 });
+      if (cleanCode !== currentStage.code || courseId !== undefined) {
+        if (targetCourseId) {
+          const dup = await prisma.stage.findFirst({
+            where: { courseId: targetCourseId, code: cleanCode, NOT: { id } }
+          });
+          if (dup) {
+            return NextResponse.json({ error: "Mã giai đoạn (code) đã được sử dụng trong khóa học này." }, { status: 400 });
+          }
         }
         data.code = cleanCode;
       }
@@ -69,10 +78,14 @@ export async function PUT(
 
     if (order !== undefined) {
       const orderNum = Number(order);
-      if (orderNum !== currentStage.order) {
-        const dupOrder = await prisma.stage.findUnique({ where: { order: orderNum } });
-        if (dupOrder) {
-          return NextResponse.json({ error: "Thứ tự hiển thị (order) đã được sử dụng." }, { status: 400 });
+      if (orderNum !== currentStage.order || courseId !== undefined) {
+        if (targetCourseId) {
+          const dupOrder = await prisma.stage.findFirst({
+            where: { courseId: targetCourseId, order: orderNum, NOT: { id } }
+          });
+          if (dupOrder) {
+            return NextResponse.json({ error: "Thứ tự hiển thị (order) đã được sử dụng trong khóa học này." }, { status: 400 });
+          }
         }
         data.order = orderNum;
       }
@@ -84,6 +97,7 @@ export async function PUT(
     if (bigExercise !== undefined) data.bigExercise = bigExercise;
     if (expectedOutput !== undefined) data.expectedOutput = expectedOutput;
     if (finalChecklist !== undefined) data.finalChecklist = finalChecklist;
+    if (courseId !== undefined) data.courseId = courseId;
     if (status !== undefined) {
       data.status = status === "DRAFT" ? "DRAFT" : "PUBLISHED";
     }
@@ -104,6 +118,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { id } = await params;
     await prisma.stage.delete({
       where: { id }

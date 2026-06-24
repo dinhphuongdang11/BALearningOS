@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { Search, Filter, PlayCircle, Edit3, Trash2, PlusCircle, AlertCircle } from "lucide-react";
-import { Lesson, Stage, LessonStatus } from "../lib/types";
+import { Lesson, Stage, Course, LessonStatus } from "../lib/types";
 
 interface LessonManagerViewProps {
   lessons: Lesson[];
   stages: Stage[];
+  courses: Course[];
   stagesMap: Record<string, string>;
   onSelectLesson: (id: string) => void;
   onEditLesson: (id: string) => void;
@@ -15,6 +16,7 @@ interface LessonManagerViewProps {
 export default function LessonManagerView({
   lessons,
   stages,
+  courses,
   stagesMap,
   onSelectLesson,
   onEditLesson,
@@ -22,6 +24,7 @@ export default function LessonManagerView({
   onAddLesson
 }: LessonManagerViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState("all");
   const [selectedStageFilter, setSelectedStageFilter] = useState("all");
 
   const getStatusBadge = (status: any) => {
@@ -64,11 +67,21 @@ export default function LessonManagerView({
     return raw.replace(/^\d+\.\s*/, "");
   };
 
+  // Filter stages based on selected course
+  const filteredStagesForSelect = stages.filter(
+    s => selectedCourseFilter === "all" || s.courseId === selectedCourseFilter
+  );
+
   const filteredLessons = lessons.filter((lesson) => {
     const matchSearch = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                         lesson.objective.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Find stage's course
+    const stage = stages.find(s => s.id === lesson.stageId);
+    const matchCourse = selectedCourseFilter === "all" || (stage && stage.courseId === selectedCourseFilter);
     const matchStage = selectedStageFilter === "all" || lesson.stageId === selectedStageFilter;
-    return matchSearch && matchStage;
+    
+    return matchSearch && matchCourse && matchStage;
   });
 
   return (
@@ -107,22 +120,47 @@ export default function LessonManagerView({
           />
         </div>
 
-        <div className="flex items-center space-x-2 w-full md:w-auto">
-          <span className="text-slate-500">
-            <Filter className="w-4 h-4" />
-          </span>
-          <select
-            value={selectedStageFilter}
-            onChange={(e) => setSelectedStageFilter(e.target.value)}
-            className="text-xs text-slate-200 bg-slate-950 border border-slate-800 py-2.5 px-3 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none w-full md:w-64 font-medium cursor-pointer"
-          >
-            <option value="all">Tất cả giai đoạn học BA</option>
-            {stages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stage.title}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {/* Course filter select */}
+          <div className="flex items-center space-x-2 w-full sm:w-64">
+            <span className="text-slate-500">
+              <Filter className="w-4 h-4" />
+            </span>
+            <select
+              value={selectedCourseFilter}
+              onChange={(e) => {
+                setSelectedCourseFilter(e.target.value);
+                setSelectedStageFilter("all"); // reset stage selection
+              }}
+              className="text-xs text-slate-200 bg-slate-950 border border-slate-800 py-2.5 px-3 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none w-full font-bold cursor-pointer"
+            >
+              <option value="all">Tất cả Khóa học</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Stage filter select */}
+          <div className="flex items-center space-x-2 w-full sm:w-64">
+            <span className="text-slate-500">
+              <Filter className="w-4 h-4" />
+            </span>
+            <select
+              value={selectedStageFilter}
+              onChange={(e) => setSelectedStageFilter(e.target.value)}
+              className="text-xs text-slate-200 bg-slate-950 border border-slate-800 py-2.5 px-3 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none w-full font-medium cursor-pointer"
+            >
+              <option value="all">Tất cả giai đoạn</option>
+              {filteredStagesForSelect.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.title}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

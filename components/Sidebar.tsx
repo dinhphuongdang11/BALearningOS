@@ -24,14 +24,14 @@ export default function Sidebar({
   const menuItems = role === "admin" 
     ? [
         { id: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
-        { id: "stages", label: "Lộ trình học tập", icon: Compass },
+        { id: "courses-manager", label: "Quản lý Khóa học", icon: Bookmark },
         { id: "stages-manager", label: "Quản lý Giai đoạn", icon: Map },
         { id: "lessons-manager", label: "Quản lý Bài học", icon: BookOpen },
         { id: "import-excel", label: "Nhập tệp Excel", icon: UploadCloud },
       ]
     : [
-        { id: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
-        { id: "stages", label: "Lộ trình học BA", icon: Compass },
+        { id: "courses", label: "Khóa học của tôi", icon: BookOpen },
+        { id: "dashboard", label: "Bảng tiến độ", icon: LayoutDashboard },
       ];
 
   return (
@@ -76,7 +76,7 @@ export default function Sidebar({
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentView === item.id || 
-            (item.id === "stages" && (currentView === "stage-detail" || currentView === "lesson-detail"));
+            (item.id === "courses" && (currentView === "course-detail" || currentView === "stage-detail" || currentView === "lesson-detail"));
           return (
             <button
               key={item.id}

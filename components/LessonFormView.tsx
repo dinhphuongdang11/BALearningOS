@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, Save, Sparkles, AlertTriangle, FileText, CheckSquare, PlusCircle, Clock } from "lucide-react";
+import { ChevronLeft, Save, Sparkles, AlertTriangle, FileText, CheckSquare, PlusCircle, Clock, Upload, Eye, EyeOff, Trash2 } from "lucide-react";
 import { Lesson, Stage, ChecklistItem } from "../lib/types";
 
 interface LessonFormViewProps {
@@ -34,6 +34,13 @@ export default function LessonFormView({
   const [realProjectApplication, setRealProjectApplication] = useState("");
   const [expectedOutput, setExpectedOutput] = useState("");
   const [checklistText, setChecklistText] = useState("");
+  
+  // HTML Upload support
+  const [htmlContent, setHtmlContent] = useState("");
+  const [htmlFileName, setHtmlFileName] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [activeTheoryTab, setActiveTheoryTab] = useState<"html" | "text">("text");
 
   const [saving, setSaving] = useState(false);
 
@@ -53,6 +60,13 @@ export default function LessonFormView({
           setExercise(data.exercise || "");
           setRealProjectApplication(data.realProjectApplication || "");
           setExpectedOutput(data.expectedOutput || "");
+          setHtmlContent(data.htmlContent || "");
+          if (data.htmlContent) {
+            setHtmlFileName("Nội dung HTML đã lưu trữ");
+            setActiveTheoryTab("html");
+          } else {
+            setActiveTheoryTab("text");
+          }
           
           if (data.checklistItems && data.checklistItems.length > 0) {
             const listStr = data.checklistItems
@@ -82,8 +96,58 @@ export default function LessonFormView({
       setRealProjectApplication("");
       setExpectedOutput("");
       setChecklistText("");
+      setHtmlContent("");
+      setHtmlFileName("");
+      setActiveTheoryTab("text");
     }
   }, [editLessonId, preSelectedStageId, isEdit, stages]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      readHtmlFile(file);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      readHtmlFile(file);
+    }
+  };
+
+  const readHtmlFile = (file: File) => {
+    if (!file.name.endsWith(".html") && !file.name.endsWith(".htm")) {
+      alert("Chỉ cho phép tải lên tệp tin định dạng HTML (.html)");
+      return;
+    }
+    setHtmlFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      // Strip script tags to keep preview secure
+      const sanitized = text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+      setHtmlContent(sanitized);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleRemoveHtml = () => {
+    setHtmlContent("");
+    setHtmlFileName("");
+    setIsPreviewMode(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +173,7 @@ export default function LessonFormView({
         exercise: exercise.trim(),
         realProjectApplication: realProjectApplication.trim(),
         expectedOutput: expectedOutput.trim(),
+        htmlContent: htmlContent.trim(), // Send the htmlContent to be saved
         checklistText: checklistText.trim()
       };
       
@@ -233,19 +298,177 @@ export default function LessonFormView({
             />
           </div>
 
-          {/* Theory inputs area */}
-          <div className="space-y-1.5">
-            <div className="flex items-center space-x-2">
-              <FileText className="w-4 h-4 text-emerald-400" />
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Nội dung lý thuyết (Bite-sized Theory):</label>
+          {/* Theory inputs area & HTML File upload */}
+          <div className="space-y-3.5 bg-slate-955/40 p-4 border border-slate-850 rounded-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-black text-slate-300 uppercase tracking-wider">Nội dung học tập cốt lõi (Theory Content) *</span>
+              </div>
+
+              {/* Tab Selector Buttons */}
+              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-850 self-start">
+                <button
+                  type="button"
+                  onClick={() => setActiveTheoryTab("text")}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition ${
+                    activeTheoryTab === "text"
+                      ? "bg-slate-800 text-slate-200"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Nhập văn bản thường
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTheoryTab("html")}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-bold flex items-center gap-1.5 transition ${
+                    activeTheoryTab === "html"
+                      ? "bg-slate-800 text-slate-200"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Tải lên tệp HTML
+                </button>
+              </div>
             </div>
-            <textarea
-              value={theory}
-              onChange={(e) => setTheory(e.target.value)}
-              rows={8}
-              placeholder="Khái niệm, các bước thực hiện, kiến thức chuyên sâu từ BABOK..."
-              className="w-full text-xs text-slate-100 bg-slate-950 border border-slate-800 p-3 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-y leading-relaxed"
-            />
+
+            {activeTheoryTab === "text" ? (
+              <div className="space-y-1">
+                <p className="text-[10px] text-slate-500 font-medium">Nhập học thuật bằng định dạng văn bản thô chuẩn.</p>
+                <textarea
+                  value={theory}
+                  onChange={(e) => setTheory(e.target.value)}
+                  rows={8}
+                  placeholder="Khái niệm, các bước thực hiện, kiến thức chuyên sâu từ BABOK..."
+                  className="w-full text-xs text-slate-100 bg-slate-950 border border-slate-800 p-3 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-y leading-relaxed"
+                />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {htmlContent ? (
+                  <div className="space-y-3">
+                    {/* File indicator card */}
+                    <div className="flex items-center justify-between p-3.5 bg-slate-950 border border-slate-800 rounded-xl">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-200">{htmlFileName}</p>
+                          <p className="text-[10px] text-slate-500 font-bold">Kích thước: {Math.round(htmlContent.length / 1024 * 10) / 10} KB • Sẵn sàng lưu trữ</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {/* Preview Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => setIsPreviewMode(!isPreviewMode)}
+                          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          {isPreviewMode ? (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5 text-amber-500" />
+                              Ẩn xem trước
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5 text-emerald-450" />
+                              Xem trước HTML
+                            </>
+                          )}
+                        </button>
+
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={handleRemoveHtml}
+                          className="p-1.5 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white rounded-lg transition cursor-pointer"
+                          title="Xóa tệp HTML này"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Preview Area */}
+                    {isPreviewMode && (
+                      <div className="space-y-2 border border-slate-800 bg-slate-950 p-4 rounded-xl">
+                        <div className="flex items-center justify-between border-b border-slate-850 pb-2 mb-2">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">KHUNG PREVIEW TRỰC TIẾP (AN TOÀN):</span>
+                          <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">HTML Sandboxed</span>
+                        </div>
+                        <div className="bg-white rounded-lg overflow-hidden border border-slate-800 h-96 relative">
+                          <iframe
+                            srcDoc={`
+                              <!DOCTYPE html>
+                              <html>
+                                <head>
+                                  <meta charset="utf-8">
+                                  <style>
+                                    body {
+                                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                      color: #1e293b;
+                                      line-height: 1.6;
+                                      padding: 16px;
+                                      margin: 0;
+                                    }
+                                    h1, h2, h3 { color: #0f172a; margin-top: 24px; margin-bottom: 12px; }
+                                    p { margin-bottom: 16px; }
+                                    ul, ol { padding-left: 20px; margin-bottom: 16px; }
+                                    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace; }
+                                    pre { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; overflow-x: auto; }
+                                    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+                                    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+                                    th { background: #f1f5f9; }
+                                  </style>
+                                </head>
+                                <body>
+                                  ${htmlContent}
+                                </body>
+                              </html>
+                            `}
+                            className="w-full h-full border-none"
+                            title="HTML Content Sandbox Preview"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Drag and drop zone */
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => document.getElementById("html-file-picker")?.click()}
+                    className={`border-2 border-dashed p-8 rounded-xl transition text-center cursor-pointer flex flex-col items-center justify-center space-y-3 ${
+                      isDragging
+                        ? "border-emerald-500 bg-emerald-500/5 text-emerald-400"
+                        : "border-slate-800 hover:border-slate-700 bg-slate-950/60 text-slate-400 hover:text-slate-300"
+                    }`}
+                  >
+                    <input
+                      id="html-file-picker"
+                      type="file"
+                      accept=".html,.htm"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                    />
+                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-full text-slate-400 group-hover:scale-105 transition-transform">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-black text-slate-300">Nhấp chọn hoặc thả tập tin HTML vào đây</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Hỗ trợ các tệp tin bài giảng xuất bản từ Word, Notion hoặc Web (.html, .htm)</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Examples area */}

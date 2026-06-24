@@ -1,30 +1,39 @@
 import React, { useState } from "react";
-import { Search, Compass, Edit3, Trash2, PlusCircle, AlertCircle } from "lucide-react";
-import { Stage } from "../lib/types";
+import { Search, Compass, Edit3, Trash2, PlusCircle, AlertCircle, Bookmark } from "lucide-react";
+import { Stage, Course } from "../lib/types";
 
 interface StageManagerViewProps {
   stages: Stage[];
+  courses: Course[];
   onSelectStage: (id: string) => void;
   onEditStage: (id: string) => void;
   onDeleteStage: (id: string) => void;
   onAddStage: () => void;
+  selectedCourseId: string | null;
+  onCourseChange: (courseId: string | null) => void;
 }
 
 export default function StageManagerView({
   stages,
+  courses,
   onSelectStage,
   onEditStage,
   onDeleteStage,
-  onAddStage
+  onAddStage,
+  selectedCourseId,
+  onCourseChange
 }: StageManagerViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredStages = stages.filter((stage) => {
-    return (
+    const matchesSearch = 
       stage.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       stage.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      stage.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+      stage.description.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCourse = !selectedCourseId || stage.courseId === selectedCourseId;
+    
+    return matchesSearch && matchesCourse;
   });
 
   return (
@@ -48,20 +57,38 @@ export default function StageManagerView({
       </div>
 
       {/* Filter and Search */}
-      <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm flex items-center justify-between" id="stage-filter-bar">
-        <div className="relative w-full md:w-80">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
-            <Search className="w-4 h-4" />
-          </span>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Tìm kiếm giai đoạn..."
-            className="w-full text-xs text-slate-200 bg-slate-950 border border-slate-800 pl-9 pr-3 py-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
-          />
+      <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center gap-4 justify-between" id="stage-filter-bar">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          {/* Search Input */}
+          <div className="relative w-full sm:w-64">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm kiếm giai đoạn..."
+              className="w-full text-xs text-slate-200 bg-slate-950 border border-slate-800 pl-9 pr-3 py-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+            />
+          </div>
+
+          {/* Course filter select */}
+          <div className="relative w-full sm:w-64">
+            <select
+              value={selectedCourseId || ""}
+              onChange={(e) => onCourseChange(e.target.value || null)}
+              className="w-full text-xs text-slate-205 bg-slate-955 border border-slate-800 p-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-bold cursor-pointer"
+            >
+              <option value="">-- Tất cả Khóa học --</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <span className="text-xs text-slate-500 font-bold">Tổng số: {stages.length} giai đoạn</span>
+
+        <span className="text-xs text-slate-500 font-bold">Tìm thấy: {filteredStages.length} giai đoạn</span>
       </div>
 
       {/* Stages Grid/Table */}
@@ -82,60 +109,64 @@ export default function StageManagerView({
                   <th className="py-4 px-6 w-24">Thứ tự</th>
                   <th className="py-4 px-3 w-32">Mã Code</th>
                   <th className="py-4 px-3">Tên Giai đoạn</th>
-                  <th className="py-4 px-3 w-40">Trạng thái</th>
-                  <th className="py-4 px-3 hidden md:table-cell w-36">Cập nhật</th>
+                  <th className="py-4 px-3">Khóa học sở hữu</th>
+                  <th className="py-4 px-3 w-32">Trạng thái</th>
                   <th className="py-4 px-6 text-right w-36">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-xs">
                 {filteredStages
                   .sort((a, b) => a.order - b.order)
-                  .map((stage) => (
-                    <tr key={stage.id} className="hover:bg-slate-800/20 transition">
-                      <td className="py-4 px-6 font-extrabold text-slate-400">
-                        #{stage.order}
-                      </td>
-                      <td className="py-4 px-3 font-mono text-emerald-400 font-bold">
-                        {stage.code}
-                      </td>
-                      <td className="py-4 px-3 font-semibold text-slate-200">
-                        {stage.title}
-                      </td>
-                      <td className="py-4 px-3">
-                        {stage.status === "PUBLISHED" ? (
-                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-                            Phát hành
-                          </span>
-                        ) : (
-                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-850 text-slate-400 border border-slate-700/50">
-                            Bản nháp
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-3 text-slate-500 font-medium hidden md:table-cell">
-                        {new Date(stage.updatedAt).toLocaleDateString("vi-VN")}
-                      </td>
-                      <td className="py-4 px-6 text-right space-x-1">
-                        <button
-                          onClick={() => onEditStage(stage.id)}
-                          id={`btn-manage-edit-stage-${stage.id}`}
-                          className="p-1.5 text-slate-500 hover:text-blue-400 rounded-lg transition inline-flex items-center cursor-pointer"
-                          title="Sửa giai đoạn"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                  .map((stage) => {
+                    const matchedCourse = courses.find(c => c.id === stage.courseId);
 
-                        <button
-                          onClick={() => onDeleteStage(stage.id)}
-                          id={`btn-manage-delete-stage-${stage.id}`}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition inline-flex items-center cursor-pointer"
-                          title="Xóa giai đoạn"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                    return (
+                      <tr key={stage.id} className="hover:bg-slate-800/20 transition">
+                        <td className="py-4 px-6 font-extrabold text-slate-400">
+                          #{stage.order}
+                        </td>
+                        <td className="py-4 px-3 font-mono text-emerald-400 font-bold">
+                          {stage.code}
+                        </td>
+                        <td className="py-4 px-3 font-semibold text-slate-200">
+                          {stage.title}
+                        </td>
+                        <td className="py-4 px-3 font-bold text-slate-400">
+                          {matchedCourse ? matchedCourse.title : "—"}
+                        </td>
+                        <td className="py-4 px-3">
+                          {stage.status === "PUBLISHED" ? (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                              Phát hành
+                            </span>
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-slate-850 text-slate-400 border border-slate-700/50">
+                              Bản nháp
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right space-x-1">
+                          <button
+                            onClick={() => onEditStage(stage.id)}
+                            id={`btn-manage-edit-stage-${stage.id}`}
+                            className="p-1.5 text-slate-500 hover:text-blue-400 rounded-lg transition inline-flex items-center cursor-pointer"
+                            title="Sửa giai đoạn"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => onDeleteStage(stage.id)}
+                            id={`btn-manage-delete-stage-${stage.id}`}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition inline-flex items-center cursor-pointer"
+                            title="Xóa giai đoạn"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

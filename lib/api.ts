@@ -1,4 +1,4 @@
-import { Stage, Lesson, ChecklistItem, Practice } from "./types";
+import { Course, Stage, Lesson, ChecklistItem, Practice, Exercise } from "./types";
 
 const API_BASE = "/api";
 
@@ -20,6 +20,82 @@ export async function fetchJson<T>(url: string, options?: RequestInit): Promise<
 }
 
 export const AppAPI = {
+  // 0. Courses
+  getCourses: async (includeDrafts = false) => {
+    return fetchJson<Course[]>(`${API_BASE}/courses?includeDrafts=${includeDrafts}`);
+  },
+
+  getCourseDetails: async (id: string, includeDrafts = false) => {
+    return fetchJson<Course & { stages: Stage[] }>(`${API_BASE}/courses/${id}?includeDrafts=${includeDrafts}`);
+  },
+
+  createCourse: async (courseInput: {
+    title: string;
+    description: string;
+    thumbnail?: string | null;
+    level: string;
+    category: string;
+    status: string;
+    sortOrder: number;
+  }) => {
+    return fetchJson<Course>(`${API_BASE}/courses`, {
+      method: "POST",
+      body: JSON.stringify(courseInput),
+    });
+  },
+
+  updateCourse: async (id: string, courseInput: {
+    title?: string;
+    description?: string;
+    thumbnail?: string | null;
+    level?: string;
+    category?: string;
+    status?: string;
+    sortOrder?: number;
+  }) => {
+    return fetchJson<Course>(`${API_BASE}/courses/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(courseInput),
+    });
+  },
+
+  deleteCourse: async (id: string) => {
+    return fetchJson<{ message: string }>(`${API_BASE}/courses/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  // 0.5. Exercises
+  getExercises: async (courseId?: string, lessonId?: string) => {
+    let url = `${API_BASE}/exercises?`;
+    if (courseId) url += `courseId=${courseId}&`;
+    if (lessonId) url += `lessonId=${lessonId}`;
+    return fetchJson<Exercise[]>(url);
+  },
+
+  saveExercise: async (payload: {
+    id?: string;
+    courseId?: string | null;
+    lessonId?: string | null;
+    title: string;
+    description: string;
+    instruction: string;
+    type: "lesson_exercise" | "course_project";
+  }) => {
+    const method = payload.id ? "PUT" : "POST";
+    const url = payload.id ? `${API_BASE}/exercises/${payload.id}` : `${API_BASE}/exercises`;
+    return fetchJson<Exercise>(url, {
+      method,
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteExercise: async (id: string) => {
+    return fetchJson<{ message: string }>(`${API_BASE}/exercises/${id}`, {
+      method: "DELETE",
+    });
+  },
+
   // 1. Stats
   getDashboardStats: async (includeDrafts = false) => {
     return fetchJson<any>(`${API_BASE}/dashboard-stats?includeDrafts=${includeDrafts}`);

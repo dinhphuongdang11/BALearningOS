@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
+import { ensureDefaultCourseAndMigrate } from "../../../../lib/migration";
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { id } = await params;
     const lesson = await prisma.lesson.findUnique({
       where: { id }
@@ -41,13 +43,16 @@ export async function GET(
       where: { lessonId: id }
     });
 
+    const exercises = await prisma.exercise.findMany({
+      where: { lessonId: id },
+      orderBy: { createdAt: "asc" }
+    });
+
     // Fetch general student progress state for this lesson
-    const progressRow = await prisma.progress.findUnique({
+    const progressRow = await prisma.progress.findFirst({
       where: {
-        entityType_entityId: {
-          entityType: "LESSON",
-          entityId: id
-        }
+        entityType: "LESSON",
+        entityId: id
       }
     });
 
@@ -62,6 +67,7 @@ export async function GET(
       exercise: lesson.smallExercise,
       checklistItems,
       practice: practice || null,
+      exercises,
       progressStatus
     });
   } catch (err: any) {
@@ -74,6 +80,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { id } = await params;
     const body = await req.json();
     const {
@@ -87,6 +94,7 @@ export async function PUT(
       exercise, // Support either name
       realProjectApplication,
       expectedOutput,
+      htmlContent,
       checklistText,
       status,
       stageId
@@ -101,9 +109,11 @@ export async function PUT(
     if (code !== undefined) {
       const cleanCode = code.trim().toUpperCase();
       if (cleanCode !== currentLesson.code) {
-        const dup = await prisma.lesson.findUnique({ where: { code: cleanCode } });
+        const dup = await prisma.lesson.findFirst({
+          where: { stageId: stageId || currentLesson.stageId, code: cleanCode, NOT: { id } }
+        });
         if (dup) {
-          return NextResponse.json({ error: "Mã bài học (code) đã tồn tại." }, { status: 400 });
+          return NextResponse.json({ error: "Mã bài học (code) đã tồn tại trong giai đoạn này." }, { status: 400 });
         }
         data.code = cleanCode;
       }
@@ -115,6 +125,7 @@ export async function PUT(
     if (objective !== undefined) data.objective = objective;
     if (theory !== undefined) data.theory = theory;
     if (example !== undefined) data.example = example;
+    if (htmlContent !== undefined) data.htmlContent = htmlContent;
     
     // Support either smallExercise or exercise
     const compExercise = smallExercise !== undefined ? smallExercise : exercise;
@@ -182,6 +193,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { id } = await params;
     await prisma.lesson.delete({
       where: { id }

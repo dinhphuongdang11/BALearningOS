@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
+import { ensureDefaultCourseAndMigrate } from "../../../lib/migration";
 
 export async function GET(req: Request) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const { searchParams } = new URL(req.url);
     const stageId = searchParams.get("stageId");
     const includeDrafts = searchParams.get("includeDrafts") === "true";
@@ -49,6 +51,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    await ensureDefaultCourseAndMigrate();
     const body = await req.json();
     const {
       code,
@@ -61,6 +64,7 @@ export async function POST(req: Request) {
       smallExercise,
       realProjectApplication,
       expectedOutput,
+      htmlContent,
       status,
       checklistText
     } = body;
@@ -73,11 +77,12 @@ export async function POST(req: Request) {
       ? code.trim().toUpperCase()
       : "LESSON-" + Math.floor(100000 + Math.random() * 900000);
 
-    const dupCode = await prisma.lesson.findUnique({
-      where: { code: computedCode }
+    // Use findFirst instead of findUnique because code is not unique in the schema
+    const dupCode = await prisma.lesson.findFirst({
+      where: { stageId, code: computedCode }
     });
     if (dupCode) {
-      return NextResponse.json({ error: "Mã bài học (code) đã tồn tại." }, { status: 400 });
+      return NextResponse.json({ error: "Mã bài học (code) đã tồn tại trong giai đoạn này." }, { status: 400 });
     }
 
     // Checking composite unique constraint: stageId + title
@@ -100,6 +105,7 @@ export async function POST(req: Request) {
         smallExercise: smallExercise || "",
         realProjectApplication: realProjectApplication || "",
         expectedOutput: expectedOutput || "",
+        htmlContent: htmlContent || "",
         status: status === "DRAFT" ? "DRAFT" : "PUBLISHED"
       }
     });

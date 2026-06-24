@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../../lib/prisma";
 import * as xlsx from "xlsx";
 
 function getRowValue(row: any, keys: string[]): any {
@@ -25,236 +24,147 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Read the workbook
+    // Read workbook
     const workbook = xlsx.read(buffer, { type: "buffer" });
+    const firstSheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[firstSheetName];
 
-    // Extract Sheets
-    const stagesSheet = workbook.Sheets["Stages"] || workbook.Sheets[workbook.SheetNames[0]];
-    const lessonsSheet = workbook.Sheets["Lessons"] || workbook.Sheets[workbook.SheetNames[1]];
-    const checklistsSheet = workbook.Sheets["Lesson_Checklists"] || workbook.Sheets[workbook.SheetNames[2]];
-
-    if (!stagesSheet) {
-      return NextResponse.json({ error: "File Excel không chứa sheet 'Stages'." }, { status: 400 });
+    if (!sheet) {
+      return NextResponse.json({ error: "File Excel rỗng hoặc không có dữ liệu." }, { status: 400 });
     }
 
-    // Convert to JSON row-by-row
-    const stagesRows = xlsx.utils.sheet_to_json<any>(stagesSheet);
-    const lessonsRows = lessonsSheet ? xlsx.utils.sheet_to_json<any>(lessonsSheet) : [];
-    const checklistsRows = checklistsSheet ? xlsx.utils.sheet_to_json<any>(checklistsSheet) : [];
+    const rows = xlsx.utils.sheet_to_json<any>(sheet);
+    if (rows.length === 0) {
+      return NextResponse.json({ error: "File Excel không chứa bất kỳ hàng dữ liệu nào." }, { status: 400 });
+    }
 
-    const parsedStages: any[] = [];
-    const parsedLessons: any[] = [];
-    const parsedChecklists: any[] = [];
+    const courses: any[] = [];
+    const modules: any[] = [];
+    const lessons: any[] = [];
+    const exercises: any[] = [];
     const errors: string[] = [];
 
-    // Helper unique checkers
-    const fileStageCodes = new Set<string>();
-    const fileLessonCodes = new Set<string>();
+    // Helper maps to track groupings during flat-file scan
+    const coursesMap = new Map<string, any>(); // title -> course
+    const modulesMap = new Map<string, any>(); // courseTitle|moduleTitle -> module
+    const lessonsMap = new Map<string, any>(); // courseTitle|moduleTitle|lessonTitle -> lesson
 
-    // 1. Parse Stages
-    console.log("Parsing Stages...");
-    for (let idx = 0; idx < stagesRows.length; idx++) {
-      const row = stagesRows[idx];
-      const rowNum = idx + 2; // offset header line in excel view
-
-      const stage_code = getRowValue(row, ["stage_code", "stageCode", "code"])?.toString()?.trim();
-      const title = getRowValue(row, ["title", "name", "tiêu đề", "tieu de"])?.toString()?.trim();
-      const description = getRowValue(row, ["description", "desc", "mô tả", "mo ta"])?.toString() || "";
-      const goal = getRowValue(row, ["goal", "mục tiêu", "muc tieu"])?.toString() || "";
-      const orderRaw = getRowValue(row, ["order", "thứ tự", "thu tu"]);
-      const bigExercise = getRowValue(row, ["big_exercise", "bigExercise", "bài tập lớn", "bai tap lon"])?.toString() || "";
-      const expectedOutput = getRowValue(row, ["expected_output", "expectedOutput", "output cần đạt", "output can dat"])?.toString() || "";
-      const finalChecklist = getRowValue(row, ["final_checklist", "finalChecklist", "checklist"])?.toString() || "";
-      const statusRaw = getRowValue(row, ["status", "trạng thái", "trang thai"])?.toString()?.trim();
-
-      if (!stage_code) {
-        errors.push(`[Stages Row ${rowNum}] Mã giai đoạn (stage_code) là bắt buộc.`);
-        continue;
-      }
-
-      if (!title) {
-        errors.push(`[Stages Row ${rowNum}] Tiêu đề (title) của giai đoạn "${stage_code}" là bắt buộc.`);
-        continue;
-      }
-
-      const order = Number(orderRaw);
-      if (isNaN(order)) {
-        errors.push(`[Stages Row ${rowNum}] Thứ tự hiển thị (order) phải là số.`);
-        continue;
-      }
-
-      const status = statusRaw && statusRaw.toUpperCase() === "DRAFT" ? "DRAFT" : "PUBLISHED";
-
-      const upperCode = stage_code.toUpperCase();
-      if (fileStageCodes.has(upperCode)) {
-        errors.push(`[Stages Row ${rowNum}] Trùng mã stage_code "${upperCode}" trong file excel.`);
-        continue;
-      }
-      fileStageCodes.add(upperCode);
-
-      parsedStages.push({
-        code: upperCode,
-        title,
-        description,
-        goal,
-        order,
-        bigExercise,
-        expectedOutput,
-        finalChecklist,
-        status
-      });
-    }
-
-    // Fetch existing stages from DB for mapping/existence check
-    const dbStages = await prisma.stage.findMany();
-    const dbStageMap = new Map<string, string>(); // code -> id
-    dbStages.forEach(s => {
-      dbStageMap.set(s.code, s.id);
-    });
-
-    // 2. Parse Lessons
-    console.log("Parsing Lessons...");
-    for (let idx = 0; idx < lessonsRows.length; idx++) {
-      const row = lessonsRows[idx];
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
       const rowNum = idx + 2;
 
-      const lesson_code = getRowValue(row, ["lesson_code", "lessonCode", "code"])?.toString()?.trim();
-      const stage_code = getRowValue(row, ["stage_code", "stageCode"])?.toString()?.trim();
-      const title = getRowValue(row, ["title", "name", "tiêu đề", "tieu de"])?.toString()?.trim();
-      const orderRaw = getRowValue(row, ["order", "thứ tự", "thu tu"]);
-      const objective = getRowValue(row, ["objective", "mục tiêu học", "muc tieu bai hoc"])?.toString() || "";
-      const theory = getRowValue(row, ["theory", "lý thuyết", "ly thuyet"])?.toString() || "";
-      const example = getRowValue(row, ["example", "ví dụ", "vi du"])?.toString() || "";
-      const smallExercise = getRowValue(row, ["small_exercise", "smallExercise", "exercise", "bài tập nhỏ", "bai tap nho"])?.toString() || "";
-      const realProjectApplication = getRowValue(row, ["real_project_application", "realProjectApplication", "áp dụng thực tế"])?.toString() || "";
-      const expectedOutput = getRowValue(row, ["expected_output", "expectedOutput", "output cần tạo"])?.toString() || "";
-      const statusRaw = getRowValue(row, ["status", "trạng thái", "trang thai"])?.toString()?.trim();
+      // Extract raw values
+      const courseTitle = getRowValue(row, ["Course Title", "coursetitle", "khóa học", "tên khóa học"])?.toString()?.trim();
+      const courseDesc = getRowValue(row, ["Course Description", "coursedescription", "mô tả khóa học"])?.toString()?.trim() || "";
+      const courseLevel = getRowValue(row, ["Course Level", "courselevel", "cấp độ"])?.toString()?.trim() || "All Levels";
+      const courseCat = getRowValue(row, ["Course Category", "coursecategory", "danh mục"])?.toString()?.trim() || "Business Analysis";
 
-      if (!lesson_code) {
-        errors.push(`[Lessons Row ${rowNum}] Mã bài học (lesson_code) là bắt buộc.`);
+      const moduleTitle = getRowValue(row, ["Module Title", "moduletitle", "chương", "giai đoạn", "tên giai đoạn"])?.toString()?.trim();
+      const moduleDesc = getRowValue(row, ["Module Description", "moduledescription", "mô tả giai đoạn", "mô tả chương"])?.toString()?.trim() || "";
+
+      const lessonTitle = getRowValue(row, ["Lesson Title", "lessontitle", "bài học", "tên bài học"])?.toString()?.trim();
+      const lessonDesc = getRowValue(row, ["Lesson Short Description", "lessonshortdescription", "mô tả bài học", "mô tả ngắn"])?.toString()?.trim() || "";
+      const estTime = getRowValue(row, ["Estimated Time", "estimatedtime", "thời lượng", "thời gian học"])?.toString()?.trim() || "30";
+
+      const exerciseTitle = getRowValue(row, ["Exercise Title", "exercisetitle", "bài tập", "tên bài tập"])?.toString()?.trim();
+      const exerciseDesc = getRowValue(row, ["Exercise Description", "exercisedescription", "mô tả bài tập"])?.toString()?.trim() || "";
+      const exerciseInst = getRowValue(row, ["Exercise Instruction", "exerciseinstruction", "hướng dẫn bài tập"])?.toString()?.trim() || "";
+
+      // Validations
+      if (!courseTitle) {
+        errors.push(`[Hàng ${rowNum}] Tên khóa học (Course Title) là bắt buộc.`);
+        continue;
+      }
+      if (!moduleTitle) {
+        errors.push(`[Hàng ${rowNum}] Tên giai đoạn/chương (Module Title) là bắt buộc.`);
+        continue;
+      }
+      if (!lessonTitle) {
+        errors.push(`[Hàng ${rowNum}] Tên bài học (Lesson Title) là bắt buộc.`);
         continue;
       }
 
-      if (!stage_code) {
-        errors.push(`[Lessons Row ${rowNum}] Mã giai đoạn cha (stage_code) là bắt buộc.`);
-        continue;
+      // 1. Course Grouping
+      let course = coursesMap.get(courseTitle);
+      if (!course) {
+        course = {
+          title: courseTitle,
+          description: courseDesc,
+          level: courseLevel,
+          category: courseCat,
+          status: "PUBLISHED",
+          sortOrder: coursesMap.size + 1
+        };
+        coursesMap.set(courseTitle, course);
+        courses.push(course);
       }
 
-      if (!title) {
-        errors.push(`[Lessons Row ${rowNum}] Tiêu đề (title) của bài học "${lesson_code}" là bắt buộc.`);
-        continue;
+      // 2. Module Grouping within Course
+      const moduleKey = `${courseTitle}||${moduleTitle}`;
+      let mod = modulesMap.get(moduleKey);
+      if (!mod) {
+        mod = {
+          courseTitle,
+          title: moduleTitle,
+          description: moduleDesc,
+          order: modulesMap.size + 1,
+          status: "PUBLISHED"
+        };
+        modulesMap.set(moduleKey, mod);
+        modules.push(mod);
       }
 
-      const order = Number(orderRaw);
-      if (isNaN(order)) {
-        errors.push(`[Lessons Row ${rowNum}] Thứ tự hiển thị bài học (order) phải là số.`);
-        continue;
+      // 3. Lesson Grouping within Module
+      const lessonKey = `${courseTitle}||${moduleTitle}||${lessonTitle}`;
+      let les = lessonsMap.get(lessonKey);
+      if (!les) {
+        les = {
+          courseTitle,
+          moduleTitle,
+          title: lessonTitle,
+          description: lessonDesc,
+          order: lessonsMap.size + 1,
+          objective: lessonDesc,
+          theory: `Bài học lý thuyết về: ${lessonTitle}. Thời lượng học dự kiến: ${estTime} phút.`,
+          status: "PUBLISHED"
+        };
+        lessonsMap.set(lessonKey, les);
+        lessons.push(les);
       }
 
-      const stageUpper = stage_code.toUpperCase();
-      // Ensure stage code exists either in file or in database
-      if (!fileStageCodes.has(stageUpper) && !dbStageMap.has(stageUpper)) {
-        errors.push(`[Lessons Row ${rowNum}] stage_code "${stageUpper}" không khớp với bất kỳ giai đoạn nào trong file hay cơ sở dữ liệu.`);
-        continue;
+      // 4. Exercise details (if available)
+      if (exerciseTitle) {
+        exercises.push({
+          courseTitle,
+          moduleTitle,
+          lessonTitle,
+          title: exerciseTitle,
+          description: exerciseDesc,
+          instruction: exerciseInst,
+          type: "lesson_exercise"
+        });
       }
-
-      const lessonUpper = lesson_code.toUpperCase();
-      if (fileLessonCodes.has(lessonUpper)) {
-        errors.push(`[Lessons Row ${rowNum}] Trùng mã lesson_code "${lessonUpper}" trong file excel.`);
-        continue;
-      }
-      fileLessonCodes.add(lessonUpper);
-
-      const status = statusRaw && statusRaw.toUpperCase() === "DRAFT" ? "DRAFT" : "PUBLISHED";
-
-      parsedLessons.push({
-        code: lessonUpper,
-        stage_code: stageUpper,
-        title,
-        order,
-        objective,
-        theory,
-        example,
-        smallExercise,
-        realProjectApplication,
-        expectedOutput,
-        status
-      });
     }
-
-    // 3. Parse Checklists
-    console.log("Parsing Lesson Checklists...");
-    for (let idx = 0; idx < checklistsRows.length; idx++) {
-      const row = checklistsRows[idx];
-      const rowNum = idx + 2;
-
-      const lesson_code = getRowValue(row, ["lesson_code", "lessonCode"])?.toString()?.trim();
-      const checklist_order_raw = getRowValue(row, ["checklist_order", "order"]);
-      const content = getRowValue(row, ["checklist_content", "content", "nội dung"])?.toString()?.trim();
-
-      if (!lesson_code) {
-        errors.push(`[Checklist Row ${rowNum}] Thiếu lesson_code.`);
-        continue;
-      }
-
-      if (!content) {
-        errors.push(`[Checklist Row ${rowNum}] Thiếu nội dung checklist.`);
-        continue;
-      }
-
-      const checklist_order = Number(checklist_order_raw) || (idx + 1);
-
-      const lessonUpper = lesson_code.toUpperCase();
-      parsedChecklists.push({
-        lesson_code: lessonUpper,
-        order: checklist_order,
-        content
-      });
-    }
-
-    // Calculate DB mutations for preview
-    const dbLessons = await prisma.lesson.findMany();
-    const dbLessonSet = new Set(dbLessons.map(l => l.code));
-
-    let createdStagesCount = 0;
-    let updatedStagesCount = 0;
-    parsedStages.forEach(s => {
-      if (dbStageMap.has(s.code)) {
-        updatedStagesCount++;
-      } else {
-        createdStagesCount++;
-      }
-    });
-
-    let createdLessonsCount = 0;
-    let updatedLessonsCount = 0;
-    parsedLessons.forEach(l => {
-      if (dbLessonSet.has(l.code)) {
-        updatedLessonsCount++;
-      } else {
-        createdLessonsCount++;
-      }
-    });
 
     return NextResponse.json({
       success: errors.length === 0,
       errors,
       counts: {
-        stagesToCreate: createdStagesCount,
-        stagesToUpdate: updatedStagesCount,
-        lessonsToCreate: createdLessonsCount,
-        lessonsToUpdate: updatedLessonsCount,
-        checklistsCount: parsedChecklists.length
+        coursesToCreate: courses.length,
+        modulesToCreate: modules.length,
+        lessonsToCreate: lessons.length,
+        exercisesToCreate: exercises.length
       },
       previewData: {
-        stages: parsedStages,
-        lessons: parsedLessons,
-        checklists: parsedChecklists
+        courses,
+        modules,
+        lessons,
+        exercises
       }
     });
 
   } catch (err: any) {
     console.error("Critical preview excel error", err);
-    return NextResponse.json({ error: "Lỗi xử lý file Excel: " + err.message }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi phân tích file Excel: " + err.message }, { status: 500 });
   }
 }

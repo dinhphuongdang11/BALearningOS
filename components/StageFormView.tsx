@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, Save, Sparkles, AlertTriangle, FileText, CheckSquare, PlusCircle, LayoutDashboard } from "lucide-react";
-import { Stage } from "../lib/types";
+import { Stage, Course } from "../lib/types";
 
 interface StageFormViewProps {
   editStageId: string | null;
+  getCourses: () => Course[];
   getStageDetails?: (id: string) => Promise<Stage>;
   onSaveStage: (id: string | null, stageInput: any) => Promise<void>;
   onCancel: () => void;
@@ -11,15 +12,18 @@ interface StageFormViewProps {
 
 export default function StageFormView({
   editStageId,
+  getCourses,
   getStageDetails,
   onSaveStage,
   onCancel
 }: StageFormViewProps) {
   const isEdit = !!editStageId;
+  const courses = getCourses();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [courseId, setCourseId] = useState("");
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -39,6 +43,7 @@ export default function StageFormView({
           setLoading(true);
           setError(null);
           const data = await getStageDetails(editStageId);
+          setCourseId(data.courseId || "");
           setCode(data.code || "");
           setTitle(data.title || "");
           setDescription(data.description || "");
@@ -57,6 +62,7 @@ export default function StageFormView({
 
       loadEditData();
     } else {
+      setCourseId(courses[0]?.id || "");
       setCode("");
       setTitle("");
       setDescription("");
@@ -75,12 +81,17 @@ export default function StageFormView({
       setError("Hãy nhập tiêu đề giai đoạn.");
       return;
     }
+    if (!courseId) {
+      setError("Vui lòng chọn khóa học mà giai đoạn này thuộc về.");
+      return;
+    }
 
     try {
       setSaving(true);
       setError(null);
       const payload = {
         code: code.trim() || undefined,
+        courseId: courseId,
         title: title.trim(),
         description: description.trim(),
         goal: goal.trim(),
@@ -147,6 +158,22 @@ export default function StageFormView({
         )}
 
         <div className="p-6 space-y-6">
+          {/* Course selector */}
+          <div className="space-y-1.5 bg-slate-955/60 p-3.5 border border-slate-850 rounded-xl">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Khóa học sở hữu *:</label>
+            <select
+              value={courseId}
+              onChange={(e) => setCourseId(e.target.value)}
+              className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 p-2.5 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-black cursor-pointer block"
+              required
+            >
+              <option value="">-- Chọn Khóa học sở hữu --</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Code */}
             <div className="space-y-1.5">
